@@ -13,9 +13,9 @@ Quick checklist. Details in [BRAINSTORM.md](BRAINSTORM.md).
 
 ## Phase 2 – Lists
 
-- [ ] Lists screen (drawer/sidebar + list content)
-- [ ] Create / rename / delete list
-- [ ] Signals for lists + Drift→signal bridge (watch lists, update signal)
+- [x] Lists screen (drawer/sidebar + list content)
+- [x] Create / rename / delete list
+- [x] Signals for lists + Drift→signal bridge (watch lists, update signal)
 
 ## Phase 3 – Tasks
 

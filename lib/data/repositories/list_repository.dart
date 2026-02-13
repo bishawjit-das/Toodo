@@ -49,4 +49,8 @@ class ListRepository {
   Future<ListRow?> getList(int id) {
     return (_db.select(_db.lists)..where((t) => t.id.equals(id))).getSingleOrNull();
   }
+
+  Future<List<ListRow>> getLists() {
+    return (_db.select(_db.lists)..orderBy([(t) => OrderingTerm.asc(t.sortOrder)])).get();
+  }
 }
