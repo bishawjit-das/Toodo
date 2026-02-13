@@ -16,6 +16,10 @@ dependencies:
   signals: ^6.3.0
   signals_flutter: ^6.3.0
   go_router: ^14.6.2
+  flutter_local_notifications: ^18.0.1
+  timezone: ^0.10.0
+  shared_preferences: ^2.3.3
+  flutter_native_timezone: ^2.0.0
 
 dev_dependencies:
   flutter_test:

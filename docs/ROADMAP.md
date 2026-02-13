@@ -25,9 +25,9 @@ Quick checklist. Details in [BRAINSTORM.md](BRAINSTORM.md).
 
 ## Phase 4 – Polish
 
-- [ ] Reminders → `flutter_local_notifications`
-- [ ] Calendar view
-- [ ] Settings
+- [x] Reminders → `flutter_local_notifications`
+- [x] Calendar view
+- [x] Settings
 
 ## Phase 5 – Sync (later)
 

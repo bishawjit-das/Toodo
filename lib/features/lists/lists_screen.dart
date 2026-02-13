@@ -1,7 +1,9 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:signals_flutter/signals_flutter.dart';
+import 'package:toodo/core/notifications/notification_service.dart';
 import 'package:toodo/core/scope/repository_scope.dart';
 import 'package:toodo/data/database/app_database.dart';
 import 'package:toodo/data/repositories/list_repository.dart';
@@ -187,7 +189,10 @@ class _ListsScreenState extends State<ListsScreen> {
 
   void _addTask(BuildContext ctx, int listId, String title, DateTime? dueDate, DateTime? reminder) {
     if (title.trim().isEmpty) return;
-    _taskRepository.insertTask(listId, title.trim(), dueDate: dueDate, reminder: reminder);
+    final notificationService = RepositoryScope.of(ctx).notificationService;
+    _taskRepository.insertTask(listId, title.trim(), dueDate: dueDate, reminder: reminder).then((id) {
+      if (reminder != null) notificationService.scheduleReminder(id, title.trim(), reminder);
+    });
     if (ctx.mounted) Navigator.pop(ctx);
   }
 
@@ -198,6 +203,7 @@ class _ListsScreenState extends State<ListsScreen> {
       builder: (ctx) => _TaskEditSheetContent(
         task: task,
         taskRepo: _taskRepository,
+        notificationService: RepositoryScope.of(context).notificationService,
         formatDate: _formatDate,
       ),
     );
@@ -243,6 +249,7 @@ class _ListsScreenState extends State<ListsScreen> {
           FilledButton(
             style: FilledButton.styleFrom(backgroundColor: Theme.of(context).colorScheme.error),
             onPressed: () {
+              RepositoryScope.of(context).notificationService.cancelReminder(task.id);
               _taskRepository.deleteTask(task.id);
               if (ctx.mounted) Navigator.pop(ctx);
             },
@@ -286,6 +293,23 @@ class _ListsScreenState extends State<ListsScreen> {
                   .toList(),
             );
           }),
+          const Divider(),
+          ListTile(
+            leading: const Icon(Icons.calendar_month),
+            title: const Text('Calendar'),
+            onTap: () {
+              Navigator.pop(context);
+              context.go('/calendar');
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.settings),
+            title: const Text('Settings'),
+            onTap: () {
+              Navigator.pop(context);
+              context.go('/settings');
+            },
+          ),
           const Divider(),
           ListTile(
             leading: const Icon(Icons.add),
@@ -408,11 +432,13 @@ class _TaskEditSheetContent extends StatefulWidget {
   const _TaskEditSheetContent({
     required this.task,
     required this.taskRepo,
+    required this.notificationService,
     required this.formatDate,
   });
 
   final Task task;
   final TaskRepository taskRepo;
+  final NotificationService notificationService;
   final String Function(DateTime) formatDate;
 
   @override
@@ -528,14 +554,20 @@ class _TaskEditSheetContentState extends State<_TaskEditSheetContent> {
                     child: const Text('Cancel'),
                   ),
                   FilledButton(
-                    onPressed: () {
-                      widget.taskRepo.updateTask(
-                        widget.task.id,
-                        title: _titleController.text.trim(),
+                    onPressed: () async {
+                      final id = widget.task.id;
+                      final title = _titleController.text.trim();
+                      widget.notificationService.cancelReminder(id);
+                      await widget.taskRepo.updateTask(
+                        id,
+                        title: title,
                         notes: _notesController.text.trim().isEmpty ? null : _notesController.text.trim(),
                         dueDate: _dueDate,
                         reminder: _reminder,
                       );
+                      if (_reminder != null) {
+                        widget.notificationService.scheduleReminder(id, title, _reminder!);
+                      }
                       if (context.mounted) Navigator.pop(context);
                     },
                     child: const Text('Save'),

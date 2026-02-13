@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:toodo/core/notifications/notification_service.dart';
 import 'package:toodo/core/scope/repository_scope.dart';
 import 'package:toodo/data/database/app_database.dart';
 import 'package:toodo/data/repositories/list_repository.dart';
@@ -10,11 +11,13 @@ void main() {
   late AppDatabase db;
   late ListRepository listRepo;
   late TaskRepository taskRepo;
+  late NotificationService notificationService;
 
   setUp(() {
     db = AppDatabase.inMemory();
     listRepo = ListRepository(db);
     taskRepo = TaskRepository(db);
+    notificationService = NotificationService();
   });
 
   tearDown(() async {
@@ -25,6 +28,7 @@ void main() {
     return RepositoryScope(
       listRepository: listRepo,
       taskRepository: taskRepo,
+      notificationService: notificationService,
       child: MaterialApp(home: child),
     );
   }
