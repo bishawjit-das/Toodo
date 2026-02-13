@@ -20,6 +20,7 @@ dependencies:
   timezone: ^0.10.0
   shared_preferences: ^2.3.3
   flutter_native_timezone: ^2.0.0
+  google_fonts: ^6.2.1
 
 dev_dependencies:
   flutter_test:
