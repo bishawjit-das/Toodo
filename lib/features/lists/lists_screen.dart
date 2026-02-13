@@ -32,7 +32,9 @@ class _ListsScreenState extends State<ListsScreen> {
     if (_listRepo != scope.listRepository) {
       _sub?.cancel();
       _listRepo = scope.listRepository;
-      _sub = _listRepo!.watchLists().listen((data) => _listsSignal.value = data);
+      _sub = _listRepo!.watchLists().listen(
+        (data) => _listsSignal.value = data,
+      );
     }
     if (_taskRepo != scope.taskRepository) {
       _taskRepo = scope.taskRepository;
@@ -44,7 +46,9 @@ class _ListsScreenState extends State<ListsScreen> {
     _taskSub?.cancel();
     final repo = _taskRepo;
     if (repo == null) return;
-    final stream = _selectedListId == null ? repo.watchAllTasks() : repo.watchTasksByListId(_selectedListId!);
+    final stream = _selectedListId == null
+        ? repo.watchAllTasks()
+        : repo.watchTasksByListId(_selectedListId!);
     _taskSub = stream.listen((data) => _tasksSignal.value = data);
   }
 
@@ -58,7 +62,9 @@ class _ListsScreenState extends State<ListsScreen> {
   ListRepository get _repo => _listRepo!;
   TaskRepository get _taskRepository => _taskRepo!;
 
-  int? get _effectiveListId => _selectedListId ?? (_listsSignal.value.isNotEmpty ? _listsSignal.value.first.id : null);
+  int? get _effectiveListId =>
+      _selectedListId ??
+      (_listsSignal.value.isNotEmpty ? _listsSignal.value.first.id : null);
 
   String _titleFor(int? id) {
     if (id == null) return 'All';
@@ -77,9 +83,15 @@ class _ListsScreenState extends State<ListsScreen> {
             onPressed: () => Scaffold.of(ctx).openDrawer(),
           ),
         ),
-        title: Watch((context) => Text(_titleFor(_selectedListId))),
+        title: Watch(
+          (context) =>
+              Text(_titleFor(_selectedListId), style: TextStyle(fontSize: 16)),
+        ),
         actions: [
-          IconButton(icon: const Icon(Icons.add), onPressed: _showAddListDialog),
+          IconButton(
+            icon: const Icon(Icons.add),
+            onPressed: _showAddListDialog,
+          ),
         ],
       ),
       drawer: _buildDrawer(context),
@@ -97,22 +109,36 @@ class _ListsScreenState extends State<ListsScreen> {
     return Watch((context) {
       final tasks = _tasksSignal.value;
       if (tasks.isEmpty) {
-        return Center(child: Text(_effectiveListId == null ? 'Select a list to add tasks' : 'No tasks'));
+        return Center(
+          child: Text(
+            _effectiveListId == null
+                ? 'Select a list to add tasks'
+                : 'No tasks',
+          ),
+        );
       }
       return ListView.builder(
         itemCount: tasks.length,
         itemBuilder: (context, index) {
           final task = tasks[index];
           return ListTile(
+            contentPadding: const EdgeInsets.symmetric(horizontal: 4),
+            dense: true,
             leading: Checkbox(
               value: task.completedAt != null,
               onChanged: (_) => _toggleTask(task),
             ),
             title: Text(
               task.title,
-              style: TextStyle(decoration: task.completedAt != null ? TextDecoration.lineThrough : null),
+              style: TextStyle(
+                decoration: task.completedAt != null
+                    ? TextDecoration.lineThrough
+                    : null,
+              ),
             ),
-            subtitle: task.dueDate != null ? Text(_formatDate(task.dueDate!)) : null,
+            subtitle: task.dueDate != null
+                ? Text(_formatDate(task.dueDate!))
+                : null,
             onTap: () => _showEditTaskSheet(task),
             onLongPress: () => _showTaskOptions(context, task),
           );
@@ -121,7 +147,8 @@ class _ListsScreenState extends State<ListsScreen> {
     });
   }
 
-  String _formatDate(DateTime d) => '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+  String _formatDate(DateTime d) =>
+      '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
 
   void _toggleTask(Task task) {
     if (task.completedAt != null) {
@@ -153,22 +180,42 @@ class _ListsScreenState extends State<ListsScreen> {
                   controller: titleController,
                   autofocus: true,
                   decoration: const InputDecoration(hintText: 'Task name'),
-                  onSubmitted: (_) => _addTask(ctx, listId, titleController.text, dueDate, reminder),
+                  onSubmitted: (_) => _addTask(
+                    ctx,
+                    listId,
+                    titleController.text,
+                    dueDate,
+                    reminder,
+                  ),
                 ),
                 const SizedBox(height: 8),
                 ListTile(
-                  title: Text(dueDate == null ? 'Due date' : _formatDate(dueDate!)),
+                  title: Text(
+                    dueDate == null ? 'Due date' : _formatDate(dueDate!),
+                  ),
                   trailing: const Icon(Icons.calendar_today),
                   onTap: () async {
-                    final picked = await showDatePicker(context: context, initialDate: DateTime.now(), firstDate: DateTime(2000), lastDate: DateTime(2100));
+                    final picked = await showDatePicker(
+                      context: context,
+                      initialDate: DateTime.now(),
+                      firstDate: DateTime(2000),
+                      lastDate: DateTime(2100),
+                    );
                     if (picked != null) setDialogState(() => dueDate = picked);
                   },
                 ),
                 ListTile(
-                  title: Text(reminder == null ? 'Reminder' : _formatDate(reminder!)),
+                  title: Text(
+                    reminder == null ? 'Reminder' : _formatDate(reminder!),
+                  ),
                   trailing: const Icon(Icons.notifications),
                   onTap: () async {
-                    final date = await showDatePicker(context: context, initialDate: DateTime.now(), firstDate: DateTime(2000), lastDate: DateTime(2100));
+                    final date = await showDatePicker(
+                      context: context,
+                      initialDate: DateTime.now(),
+                      firstDate: DateTime(2000),
+                      lastDate: DateTime(2100),
+                    );
                     if (date != null) setDialogState(() => reminder = date);
                   },
                 ),
@@ -176,9 +223,18 @@ class _ListsScreenState extends State<ListsScreen> {
             ),
           ),
           actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancel'),
+            ),
             FilledButton(
-              onPressed: () => _addTask(ctx, listId, titleController.text, dueDate, reminder),
+              onPressed: () => _addTask(
+                ctx,
+                listId,
+                titleController.text,
+                dueDate,
+                reminder,
+              ),
               child: const Text('Add'),
             ),
           ],
@@ -187,12 +243,22 @@ class _ListsScreenState extends State<ListsScreen> {
     );
   }
 
-  void _addTask(BuildContext ctx, int listId, String title, DateTime? dueDate, DateTime? reminder) {
+  void _addTask(
+    BuildContext ctx,
+    int listId,
+    String title,
+    DateTime? dueDate,
+    DateTime? reminder,
+  ) {
     if (title.trim().isEmpty) return;
     final notificationService = RepositoryScope.of(ctx).notificationService;
-    _taskRepository.insertTask(listId, title.trim(), dueDate: dueDate, reminder: reminder).then((id) {
-      if (reminder != null) notificationService.scheduleReminder(id, title.trim(), reminder);
-    });
+    _taskRepository
+        .insertTask(listId, title.trim(), dueDate: dueDate, reminder: reminder)
+        .then((id) {
+          if (reminder != null) {
+            notificationService.scheduleReminder(id, title.trim(), reminder);
+          }
+        });
     if (ctx.mounted) Navigator.pop(ctx);
   }
 
@@ -245,11 +311,18 @@ class _ListsScreenState extends State<ListsScreen> {
         title: const Text('Delete task?'),
         content: Text('Delete "${task.title}"?'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
           FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: Theme.of(context).colorScheme.error),
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(context).colorScheme.error,
+            ),
             onPressed: () {
-              RepositoryScope.of(context).notificationService.cancelReminder(task.id);
+              RepositoryScope.of(
+                context,
+              ).notificationService.cancelReminder(task.id);
               _taskRepository.deleteTask(task.id);
               if (ctx.mounted) Navigator.pop(ctx);
             },
@@ -262,26 +335,25 @@ class _ListsScreenState extends State<ListsScreen> {
 
   Widget _buildDrawer(BuildContext context) {
     return Drawer(
-      child: ListView(
-        padding: EdgeInsets.zero,
-        children: [
-          const DrawerHeader(
-            decoration: BoxDecoration(color: Colors.deepPurple),
-            child: Text('Toodo', style: TextStyle(color: Colors.white, fontSize: 24)),
-          ),
-          ListTile(
-            title: const Text('All'),
-            selected: _selectedListId == null,
-            onTap: () {
-              setState(() => _selectedListId = null);
-              _subscribeToTasks();
-            },
-          ),
-          Watch((context) {
-            final lists = _listsSignal.value;
-            return Column(
-              children: lists
-                  .map((list) => ListTile(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.zero),
+      child: SafeArea(
+        child: ListView(
+          padding: EdgeInsets.zero,
+          children: [
+            ListTile(
+              title: const Text('All'),
+              selected: _selectedListId == null,
+              onTap: () {
+                setState(() => _selectedListId = null);
+                _subscribeToTasks();
+              },
+            ),
+            Watch((context) {
+              final lists = _listsSignal.value;
+              return Column(
+                children: lists
+                    .map(
+                      (list) => ListTile(
                         title: Text(list.name),
                         selected: _selectedListId == list.id,
                         onTap: () {
@@ -289,34 +361,36 @@ class _ListsScreenState extends State<ListsScreen> {
                           _subscribeToTasks();
                         },
                         onLongPress: () => _showListOptions(context, list),
-                      ))
-                  .toList(),
-            );
-          }),
-          const Divider(),
-          ListTile(
-            leading: const Icon(Icons.calendar_month),
-            title: const Text('Calendar'),
-            onTap: () {
-              Navigator.pop(context);
-              context.go('/calendar');
-            },
-          ),
-          ListTile(
-            leading: const Icon(Icons.settings),
-            title: const Text('Settings'),
-            onTap: () {
-              Navigator.pop(context);
-              context.go('/settings');
-            },
-          ),
-          const Divider(),
-          ListTile(
-            leading: const Icon(Icons.add),
-            title: const Text('Add list'),
-            onTap: _showAddListDialog,
-          ),
-        ],
+                      ),
+                    )
+                    .toList(),
+              );
+            }),
+            const Divider(),
+            ListTile(
+              leading: const Icon(Icons.calendar_month),
+              title: const Text('Calendar'),
+              onTap: () {
+                Navigator.pop(context);
+                context.go('/calendar');
+              },
+            ),
+            ListTile(
+              leading: const Icon(Icons.settings),
+              title: const Text('Settings'),
+              onTap: () {
+                Navigator.pop(context);
+                context.go('/settings');
+              },
+            ),
+            const Divider(),
+            ListTile(
+              leading: const Icon(Icons.add),
+              title: const Text('Add list'),
+              onTap: _showAddListDialog,
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -337,8 +411,14 @@ class _ListsScreenState extends State<ListsScreen> {
           onSubmitted: (_) => _addList(controller.text, ctx),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-          FilledButton(onPressed: () => _addList(controller.text, ctx), child: const Text('Add')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => _addList(controller.text, ctx),
+            child: const Text('Add'),
+          ),
         ],
       ),
     );
@@ -392,8 +472,14 @@ class _ListsScreenState extends State<ListsScreen> {
           onSubmitted: (_) => _renameList(list.id, controller.text, ctx),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-          FilledButton(onPressed: () => _renameList(list.id, controller.text, ctx), child: const Text('Save')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => _renameList(list.id, controller.text, ctx),
+            child: const Text('Save'),
+          ),
         ],
       ),
     );
@@ -412,12 +498,19 @@ class _ListsScreenState extends State<ListsScreen> {
         title: const Text('Delete list?'),
         content: Text('Delete "${list.name}"? This cannot be undone.'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
           FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: Theme.of(context).colorScheme.error),
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(context).colorScheme.error,
+            ),
             onPressed: () {
               _repo.deleteList(list.id);
-              if (_selectedListId == list.id) setState(() => _selectedListId = null);
+              if (_selectedListId == list.id) {
+                setState(() => _selectedListId = null);
+              }
               if (ctx.mounted) Navigator.pop(ctx);
             },
             child: const Text('Delete'),
@@ -446,8 +539,12 @@ class _TaskEditSheetContent extends StatefulWidget {
 }
 
 class _TaskEditSheetContentState extends State<_TaskEditSheetContent> {
-  late final TextEditingController _titleController = TextEditingController(text: widget.task.title);
-  late final TextEditingController _notesController = TextEditingController(text: widget.task.notes ?? '');
+  late final TextEditingController _titleController = TextEditingController(
+    text: widget.task.title,
+  );
+  late final TextEditingController _notesController = TextEditingController(
+    text: widget.task.notes ?? '',
+  );
   DateTime? _dueDate;
   DateTime? _reminder;
   List<Task> _subtasks = [];
@@ -477,7 +574,9 @@ class _TaskEditSheetContentState extends State<_TaskEditSheetContent> {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).viewInsets.bottom,
+      ),
       child: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(16),
@@ -495,7 +594,9 @@ class _TaskEditSheetContentState extends State<_TaskEditSheetContent> {
                 maxLines: 2,
               ),
               ListTile(
-                title: Text(_dueDate == null ? 'Due date' : widget.formatDate(_dueDate!)),
+                title: Text(
+                  _dueDate == null ? 'Due date' : widget.formatDate(_dueDate!),
+                ),
                 onTap: () async {
                   final picked = await showDatePicker(
                     context: context,
@@ -507,7 +608,11 @@ class _TaskEditSheetContentState extends State<_TaskEditSheetContent> {
                 },
               ),
               ListTile(
-                title: Text(_reminder == null ? 'Reminder' : widget.formatDate(_reminder!)),
+                title: Text(
+                  _reminder == null
+                      ? 'Reminder'
+                      : widget.formatDate(_reminder!),
+                ),
                 onTap: () async {
                   final date = await showDatePicker(
                     context: context,
@@ -520,22 +625,26 @@ class _TaskEditSheetContentState extends State<_TaskEditSheetContent> {
               ),
               const Divider(),
               Text('Subtasks', style: Theme.of(context).textTheme.titleSmall),
-              ..._subtasks.map((t) => ListTile(
-                    title: Text(t.title),
-                    trailing: IconButton(
-                      icon: const Icon(Icons.close),
-                      onPressed: () async {
-                        await widget.taskRepo.deleteTask(t.id);
-                        _loadSubtasks();
-                      },
-                    ),
-                  )),
+              ..._subtasks.map(
+                (t) => ListTile(
+                  title: Text(t.title),
+                  trailing: IconButton(
+                    icon: const Icon(Icons.close),
+                    onPressed: () async {
+                      await widget.taskRepo.deleteTask(t.id);
+                      _loadSubtasks();
+                    },
+                  ),
+                ),
+              ),
               Row(
                 children: [
                   Expanded(
                     child: TextField(
                       controller: _subtaskController,
-                      decoration: const InputDecoration(hintText: 'Add subtask'),
+                      decoration: const InputDecoration(
+                        hintText: 'Add subtask',
+                      ),
                       onSubmitted: (_) => _addSubtask(),
                     ),
                   ),
@@ -561,12 +670,18 @@ class _TaskEditSheetContentState extends State<_TaskEditSheetContent> {
                       await widget.taskRepo.updateTask(
                         id,
                         title: title,
-                        notes: _notesController.text.trim().isEmpty ? null : _notesController.text.trim(),
+                        notes: _notesController.text.trim().isEmpty
+                            ? null
+                            : _notesController.text.trim(),
                         dueDate: _dueDate,
                         reminder: _reminder,
                       );
                       if (_reminder != null) {
-                        widget.notificationService.scheduleReminder(id, title, _reminder!);
+                        widget.notificationService.scheduleReminder(
+                          id,
+                          title,
+                          _reminder!,
+                        );
                       }
                       if (context.mounted) Navigator.pop(context);
                     },
@@ -584,7 +699,11 @@ class _TaskEditSheetContentState extends State<_TaskEditSheetContent> {
   void _addSubtask() {
     final title = _subtaskController.text.trim();
     if (title.isEmpty) return;
-    widget.taskRepo.insertTask(widget.task.listId, title, parentId: widget.task.id);
+    widget.taskRepo.insertTask(
+      widget.task.listId,
+      title,
+      parentId: widget.task.id,
+    );
     _subtaskController.clear();
     _loadSubtasks();
   }
