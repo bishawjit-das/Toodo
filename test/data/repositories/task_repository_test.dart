@@ -80,4 +80,25 @@ void main() {
       expect(task!.completedAt, equals(null));
     });
   });
+
+  group('TaskRepository watchAllTasks', () {
+    test('emits tasks from all lists', () async {
+      final list1 = await listRepo.insertList('L1');
+      final list2 = await listRepo.insertList('L2');
+      await taskRepo.insertTask(list1, 'Task 1');
+      await taskRepo.insertTask(list2, 'Task 2');
+      final all = await taskRepo.watchAllTasks().first;
+      expect(all.length, 2);
+      expect(all.map((t) => t.title), containsAll(['Task 1', 'Task 2']));
+    });
+
+    test('excludes subtasks (parentId not null)', () async {
+      final listId = await listRepo.insertList('Default');
+      final parentTaskId = await taskRepo.insertTask(listId, 'Parent');
+      await taskRepo.insertTask(listId, 'Child', parentId: parentTaskId);
+      final all = await taskRepo.watchAllTasks().first;
+      expect(all.length, 1);
+      expect(all.first.title, 'Parent');
+    });
+  });
 }

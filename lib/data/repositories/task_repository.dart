@@ -12,6 +12,31 @@ class TaskRepository {
         .watch();
   }
 
+  /// All top-level tasks across lists (for "All" view). Excludes subtasks.
+  Stream<List<Task>> watchAllTasks() {
+    return (_db.select(_db.tasks)
+          ..where((t) => t.parentId.isNull())
+          ..orderBy([
+            (t) => OrderingTerm.asc(t.sortOrder),
+            (t) => OrderingTerm.asc(t.id),
+          ]))
+        .watch();
+  }
+
+  Stream<List<Task>> watchSubtasksOf(int parentId) {
+    return (_db.select(_db.tasks)
+          ..where((t) => t.parentId.equals(parentId))
+          ..orderBy([(t) => OrderingTerm.asc(t.sortOrder), (t) => OrderingTerm.asc(t.id)]))
+        .watch();
+  }
+
+  Future<List<Task>> getSubtasks(int parentId) {
+    return (_db.select(_db.tasks)
+          ..where((t) => t.parentId.equals(parentId))
+          ..orderBy([(t) => OrderingTerm.asc(t.sortOrder), (t) => OrderingTerm.asc(t.id)]))
+        .get();
+  }
+
   Future<int> insertTask(
     int listId,
     String title, {

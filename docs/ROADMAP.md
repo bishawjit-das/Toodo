@@ -19,9 +19,9 @@ Quick checklist. Details in [BRAINSTORM.md](BRAINSTORM.md).
 
 ## Phase 3 – Tasks
 
-- [ ] Task list per list; add / edit / complete / delete
-- [ ] Due date, reminder (storage only)
-- [ ] Subtasks (`parentId`)
+- [x] Task list per list; add / edit / complete / delete
+- [x] Due date, reminder (storage only)
+- [x] Subtasks (`parentId`)
 
 ## Phase 4 – Polish
 
