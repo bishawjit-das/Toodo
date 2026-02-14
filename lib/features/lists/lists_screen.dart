@@ -51,10 +51,17 @@ class _ListsScreenState extends State<ListsScreen> {
   late final Signal<List<Task>> _tasksSignal = signal<List<Task>>([]);
   StreamSubscription<List<ListRow>>? _sub;
   StreamSubscription<List<Task>>? _taskSub;
+
   /// Virtual view: 'all', 'today', 'tomorrow', 'next7'. When null, a list is selected.
   String? _selectedVirtualKey = _virtualAll;
   int? _selectedListId;
   bool _inboxEnsured = false;
+
+  /// Name of list just created; used as title until watchLists() emits.
+  int? _createdListId;
+  String? _createdListName;
+
+  final _scaffoldKey = GlobalKey<ScaffoldState>();
 
   @override
   void didChangeDependencies() {
@@ -68,6 +75,10 @@ class _ListsScreenState extends State<ListsScreen> {
         if (data.isEmpty && !_inboxEnsured) {
           _inboxEnsured = true;
           _listRepo!.insertList(_inboxName);
+        }
+        if (_createdListId != null && data.any((l) => l.id == _createdListId)) {
+          _createdListId = null;
+          _createdListName = null;
         }
         _listsSignal.value = data;
       });
@@ -88,7 +99,9 @@ class _ListsScreenState extends State<ListsScreen> {
         if (key == _virtualAll) {
           _tasksSignal.value = data;
         } else if (key == _virtualCompleted) {
-          _tasksSignal.value = data.where((t) => t.completedAt != null).toList();
+          _tasksSignal.value = data
+              .where((t) => t.completedAt != null)
+              .toList();
         } else if (key == _virtualTrash) {
           _tasksSignal.value = []; // No soft delete yet
         } else {
@@ -103,7 +116,9 @@ class _ListsScreenState extends State<ListsScreen> {
         }
       });
     } else {
-      _taskSub = repo.watchTasksByListId(_selectedListId!).listen((data) => _tasksSignal.value = data);
+      _taskSub = repo
+          .watchTasksByListId(_selectedListId!)
+          .listen((data) => _tasksSignal.value = data);
     }
   }
 
@@ -128,40 +143,49 @@ class _ListsScreenState extends State<ListsScreen> {
   String _titleFor() {
     if (_selectedVirtualKey != null) {
       switch (_selectedVirtualKey!) {
-        case _virtualAll: return 'All';
-        case _virtualToday: return 'Today';
-        case _virtualTomorrow: return 'Tomorrow';
-        case _virtualNext7: return 'Next 7 days';
-        case _virtualCompleted: return 'Completed';
-        case _virtualTrash: return 'Trash';
-        default: return 'All';
+        case _virtualAll:
+          return 'All';
+        case _virtualToday:
+          return 'Today';
+        case _virtualTomorrow:
+          return 'Tomorrow';
+        case _virtualNext7:
+          return 'Next 7 days';
+        case _virtualCompleted:
+          return 'Completed';
+        case _virtualTrash:
+          return 'Trash';
+        default:
+          return 'All';
       }
     }
     final match = _listsSignal.value.where((l) => l.id == _selectedListId);
-    return match.isEmpty ? 'List' : match.first.name;
+    if (match.isNotEmpty) return match.first.name;
+    if (_selectedListId == _createdListId && _createdListName != null) {
+      return _createdListName!;
+    }
+    return 'List';
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      key: _scaffoldKey,
       appBar: AppBar(
         titleSpacing: 0,
-        leading: Builder(
-          builder: (ctx) => IconButton(
-            key: const Key('drawer_menu'),
-            icon: const Icon(Icons.menu),
-            onPressed: () => Scaffold.of(ctx).openDrawer(),
-          ),
+        leading: IconButton(
+          key: const Key('drawer_menu'),
+          icon: const Icon(Icons.menu),
+          onPressed: () => _scaffoldKey.currentState?.openDrawer(),
         ),
         title: Watch(
-          (context) =>
-              Text(_titleFor(), style: TextStyle(fontSize: 16)),
+          (context) => Text(_titleFor(), style: TextStyle(fontSize: 16)),
         ),
         actions: [
           IconButton(
-            key: const Key('add_list'),
-            icon: const Icon(Icons.add),
-            onPressed: _showAddListDialog,
+            key: const Key('settings'),
+            icon: const Icon(Icons.settings),
+            onPressed: () => context.go('/settings'),
           ),
         ],
       ),
@@ -219,6 +243,9 @@ class _ListsScreenState extends State<ListsScreen> {
   String _formatDate(DateTime d) =>
       '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
 
+  String _formatDateTime(DateTime d) =>
+      '${_formatDate(d)} ${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
+
   void _toggleTask(Task task) {
     if (task.completedAt != null) {
       _taskRepository.incompleteTask(task.id);
@@ -230,83 +257,134 @@ class _ListsScreenState extends State<ListsScreen> {
   void _showAddTaskSheet() {
     final listId = _effectiveListId;
     if (listId == null) return;
-    if (Scaffold.maybeOf(context)?.isDrawerOpen ?? false) {
-      Navigator.of(context).pop(); // close drawer only if open
+    if (_scaffoldKey.currentState?.isDrawerOpen ?? false) {
+      Navigator.of(context).pop();
     }
     final titleController = TextEditingController();
     DateTime? dueDate;
     DateTime? reminder;
     showModalBottomSheet<void>(
       context: context,
-      builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setDialogState) => AlertDialog(
-          title: const Text('New task'),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: titleController,
-                  autofocus: true,
-                  decoration: const InputDecoration(hintText: 'Task name'),
-                  onSubmitted: (_) => _addTask(
-                    ctx,
-                    listId,
-                    titleController.text,
-                    dueDate,
-                    reminder,
+      isScrollControlled: true,
+      builder: (ctx) => Padding(
+        padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
+        child: SafeArea(
+          child: StatefulBuilder(
+            builder: (ctx, setSheetState) => Padding(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const Text(
+                    'New task',
+                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
                   ),
-                ),
-                const SizedBox(height: 8),
-                ListTile(
-                  title: Text(
-                    dueDate == null ? 'Due date' : _formatDate(dueDate!),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: titleController,
+                    autofocus: true,
+                    decoration: const InputDecoration(
+                      hintText: 'Task name',
+                      border: OutlineInputBorder(),
+                      isDense: true,
+                    ),
+                    onSubmitted: (_) => _addTask(
+                      ctx,
+                      listId,
+                      titleController.text,
+                      dueDate,
+                      reminder,
+                    ),
                   ),
-                  trailing: const Icon(Icons.calendar_today),
-                  onTap: () async {
-                    final picked = await showDatePicker(
-                      context: context,
-                      initialDate: DateTime.now(),
-                      firstDate: DateTime(2000),
-                      lastDate: DateTime(2100),
-                    );
-                    if (picked != null) setDialogState(() => dueDate = picked);
-                  },
-                ),
-                ListTile(
-                  title: Text(
-                    reminder == null ? 'Reminder' : _formatDate(reminder!),
+                  const SizedBox(height: 12),
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: Text(
+                      dueDate == null ? 'Due date' : _formatDateTime(dueDate!),
+                    ),
+                    trailing: const Icon(Icons.calendar_today, size: 22),
+                    onTap: () async {
+                      final now = DateTime.now();
+                      final picked = await showDatePicker(
+                        context: context,
+                        initialDate: dueDate ?? now,
+                        firstDate: DateTime(2000),
+                        lastDate: DateTime(2100),
+                      );
+                      if (picked == null) return;
+                      if (!mounted) return;
+                      final time = await showTimePicker(
+                        context: context,
+                        initialTime: dueDate != null
+                            ? TimeOfDay.fromDateTime(dueDate!)
+                            : TimeOfDay.fromDateTime(now),
+                      );
+                      if (time != null && mounted) {
+                        setSheetState(
+                          () => dueDate = DateTime(
+                            picked.year,
+                            picked.month,
+                            picked.day,
+                            time.hour,
+                            time.minute,
+                          ),
+                        );
+                      }
+                    },
                   ),
-                  trailing: const Icon(Icons.notifications),
-                  onTap: () async {
-                    final date = await showDatePicker(
-                      context: context,
-                      initialDate: DateTime.now(),
-                      firstDate: DateTime(2000),
-                      lastDate: DateTime(2100),
-                    );
-                    if (date != null) setDialogState(() => reminder = date);
-                  },
-                ),
-              ],
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: Text(
+                      reminder == null
+                          ? 'Reminder'
+                          : _formatDateTime(reminder!),
+                    ),
+                    trailing: const Icon(Icons.notifications, size: 22),
+                    onTap: () async {
+                      final now = DateTime.now();
+                      final date = await showDatePicker(
+                        context: context,
+                        initialDate: reminder ?? now,
+                        firstDate: DateTime(2000),
+                        lastDate: DateTime(2100),
+                      );
+                      if (date == null) return;
+                      if (!mounted) return;
+                      final time = await showTimePicker(
+                        context: context,
+                        initialTime: reminder != null
+                            ? TimeOfDay.fromDateTime(reminder!)
+                            : TimeOfDay.fromDateTime(now),
+                      );
+                      if (time != null && mounted) {
+                        setSheetState(
+                          () => reminder = DateTime(
+                            date.year,
+                            date.month,
+                            date.day,
+                            time.hour,
+                            time.minute,
+                          ),
+                        );
+                      }
+                    },
+                  ),
+                  const SizedBox(height: 16),
+                  FilledButton(
+                    onPressed: () => _addTask(
+                      ctx,
+                      listId,
+                      titleController.text,
+                      dueDate,
+                      reminder,
+                    ),
+                    child: const Text('Add'),
+                  ),
+                ],
+              ),
             ),
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () => _addTask(
-                ctx,
-                listId,
-                titleController.text,
-                dueDate,
-                reminder,
-              ),
-              child: const Text('Add'),
-            ),
-          ],
         ),
       ),
     );
@@ -340,6 +418,7 @@ class _ListsScreenState extends State<ListsScreen> {
         taskRepo: _taskRepository,
         notificationService: RepositoryScope.of(context).notificationService,
         formatDate: _formatDate,
+        formatDateTime: _formatDateTime,
       ),
     );
   }
@@ -432,14 +511,17 @@ class _ListsScreenState extends State<ListsScreen> {
           children: [
             // Section 1: Inbox, Today, Tomorrow, Next 7 days, All
             Watch((context) {
-              final inbox = _listsSignal.value.where((l) => l.name == _inboxName).firstOrNull;
+              final inbox = _listsSignal.value
+                  .where((l) => l.name == _inboxName)
+                  .firstOrNull;
               if (inbox == null) return const SizedBox.shrink();
               return ListTile(
                 leading: const Icon(Icons.inbox, size: 22),
                 title: const Text('Inbox'),
                 horizontalTitleGap: _drawerTileGap,
                 minLeadingWidth: _drawerTileLead,
-                selected: _selectedVirtualKey == null && _selectedListId == inbox.id,
+                selected:
+                    _selectedVirtualKey == null && _selectedListId == inbox.id,
                 onTap: () => selectList(inbox.id),
                 onLongPress: null,
               );
@@ -477,23 +559,31 @@ class _ListsScreenState extends State<ListsScreen> {
               onTap: () => selectVirtual(_virtualAll),
             ),
             const Divider(),
-            // Section 2: Custom lists
+            // Section 2: Custom lists (divider only when there are custom lists)
             Watch((context) {
-              final userLists = _listsSignal.value.where((l) => l.name != _inboxName).toList();
+              final userLists = _listsSignal.value
+                  .where((l) => l.name != _inboxName)
+                  .toList();
               if (userLists.isEmpty) return const SizedBox.shrink();
               return Column(
-                children: userLists.map((list) => ListTile(
-                  leading: const Icon(Icons.list_alt, size: 22),
-                  title: Text(list.name),
-                  horizontalTitleGap: _drawerTileGap,
-                  minLeadingWidth: _drawerTileLead,
-                  selected: _selectedVirtualKey == null && _selectedListId == list.id,
-                  onTap: () => selectList(list.id),
-                  onLongPress: () => _showListOptions(context, list),
-                )).toList(),
+                children: [
+                  ...userLists.map(
+                    (list) => ListTile(
+                      leading: const Icon(Icons.list_alt, size: 22),
+                      title: Text(list.name),
+                      horizontalTitleGap: _drawerTileGap,
+                      minLeadingWidth: _drawerTileLead,
+                      selected:
+                          _selectedVirtualKey == null &&
+                          _selectedListId == list.id,
+                      onTap: () => selectList(list.id),
+                      onLongPress: () => _showListOptions(context, list),
+                    ),
+                  ),
+                  const Divider(),
+                ],
               );
             }),
-            const Divider(),
             // Section 3: Completed, Trash
             ListTile(
               leading: const Icon(Icons.check_circle_outline, size: 22),
@@ -513,27 +603,6 @@ class _ListsScreenState extends State<ListsScreen> {
             ),
             const Divider(),
             ListTile(
-              leading: const Icon(Icons.calendar_month),
-              title: const Text('Calendar'),
-              horizontalTitleGap: 8,
-              minLeadingWidth: 32,
-              onTap: () {
-                Navigator.pop(context);
-                context.go('/calendar');
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.settings),
-              title: const Text('Settings'),
-              horizontalTitleGap: 8,
-              minLeadingWidth: 32,
-              onTap: () {
-                Navigator.pop(context);
-                context.go('/settings');
-              },
-            ),
-            const Divider(),
-            ListTile(
               leading: const Icon(Icons.add),
               title: const Text('Add list'),
               horizontalTitleGap: 8,
@@ -547,38 +616,78 @@ class _ListsScreenState extends State<ListsScreen> {
   }
 
   void _showAddListDialog() {
-    if (Scaffold.maybeOf(context)?.isDrawerOpen ?? false) {
-      Navigator.of(context).pop(); // close drawer only if open
+    final wasDrawerOpen = _scaffoldKey.currentState?.isDrawerOpen ?? false;
+    if (wasDrawerOpen) {
+      Navigator.of(context).pop();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _showAddListSheet();
+      });
+      return;
     }
+    _showAddListSheet();
+  }
+
+  void _showAddListSheet() {
     final controller = TextEditingController();
-    showDialog<void>(
+    showModalBottomSheet<void>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('New list'),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          decoration: const InputDecoration(hintText: 'List name'),
-          onSubmitted: (_) => _addList(controller.text, ctx),
+      isScrollControlled: true,
+      builder: (ctx) => Padding(
+        padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
+        child: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Text(
+                  'New list',
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: controller,
+                  autofocus: true,
+                  decoration: const InputDecoration(
+                    hintText: 'List name',
+                    border: OutlineInputBorder(),
+                    isDense: true,
+                  ),
+                  onSubmitted: (_) => _addList(controller.text, ctx),
+                ),
+                const SizedBox(height: 16),
+                FilledButton(
+                  onPressed: () => _addList(controller.text, ctx),
+                  child: const Text('Add'),
+                ),
+              ],
+            ),
+          ),
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () => _addList(controller.text, ctx),
-            child: const Text('Add'),
-          ),
-        ],
       ),
     );
   }
 
-  void _addList(String name, BuildContext dialogContext) {
+  Future<void> _addList(String name, BuildContext sheetContext) async {
     if (name.trim().isEmpty) return;
-    _repo.insertList(name.trim());
-    if (dialogContext.mounted) Navigator.pop(dialogContext);
+    final id = await _repo.insertList(name.trim());
+    if (!mounted) return;
+    final listName = name.trim();
+    setState(() {
+      _selectedVirtualKey = null;
+      _selectedListId = id;
+      _createdListId = id;
+      _createdListName = listName;
+    });
+    _subscribeToTasks();
+    if (sheetContext.mounted) Navigator.pop(sheetContext);
+    if (!mounted) return;
+    // Close drawer after sheet is dismissed.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _scaffoldKey.currentState?.closeDrawer();
+    });
   }
 
   void _showListOptions(BuildContext context, ListRow list) {
@@ -682,12 +791,14 @@ class _TaskEditSheetContent extends StatefulWidget {
     required this.taskRepo,
     required this.notificationService,
     required this.formatDate,
+    required this.formatDateTime,
   });
 
   final Task task;
   final TaskRepository taskRepo;
   final NotificationService notificationService;
   final String Function(DateTime) formatDate;
+  final String Function(DateTime) formatDateTime;
 
   @override
   State<_TaskEditSheetContent> createState() => _TaskEditSheetContentState();
@@ -750,32 +861,72 @@ class _TaskEditSheetContentState extends State<_TaskEditSheetContent> {
               ),
               ListTile(
                 title: Text(
-                  _dueDate == null ? 'Due date' : widget.formatDate(_dueDate!),
+                  _dueDate == null
+                      ? 'Due date'
+                      : widget.formatDateTime(_dueDate!),
                 ),
                 onTap: () async {
+                  final now = DateTime.now();
                   final picked = await showDatePicker(
                     context: context,
-                    initialDate: _dueDate ?? DateTime.now(),
+                    initialDate: _dueDate ?? now,
                     firstDate: DateTime(2000),
                     lastDate: DateTime(2100),
                   );
-                  if (picked != null) setState(() => _dueDate = picked);
+                  if (picked == null) return;
+                  if (!context.mounted) return;
+                  final time = await showTimePicker(
+                    context: context,
+                    initialTime: _dueDate != null
+                        ? TimeOfDay.fromDateTime(_dueDate!)
+                        : TimeOfDay.fromDateTime(now),
+                  );
+                  if (time != null && mounted) {
+                    setState(
+                      () => _dueDate = DateTime(
+                        picked.year,
+                        picked.month,
+                        picked.day,
+                        time.hour,
+                        time.minute,
+                      ),
+                    );
+                  }
                 },
               ),
               ListTile(
                 title: Text(
                   _reminder == null
                       ? 'Reminder'
-                      : widget.formatDate(_reminder!),
+                      : widget.formatDateTime(_reminder!),
                 ),
                 onTap: () async {
+                  final now = DateTime.now();
                   final date = await showDatePicker(
                     context: context,
-                    initialDate: _reminder ?? DateTime.now(),
+                    initialDate: _reminder ?? now,
                     firstDate: DateTime(2000),
                     lastDate: DateTime(2100),
                   );
-                  if (date != null) setState(() => _reminder = date);
+                  if (date == null) return;
+                  if (!context.mounted) return;
+                  final time = await showTimePicker(
+                    context: context,
+                    initialTime: _reminder != null
+                        ? TimeOfDay.fromDateTime(_reminder!)
+                        : TimeOfDay.fromDateTime(now),
+                  );
+                  if (time != null && mounted) {
+                    setState(
+                      () => _reminder = DateTime(
+                        date.year,
+                        date.month,
+                        date.day,
+                        time.hour,
+                        time.minute,
+                      ),
+                    );
+                  }
                 },
               ),
               const Divider(),

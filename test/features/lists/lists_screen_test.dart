@@ -53,7 +53,9 @@ void main() {
       await tester.pumpWidget(wrapWithScope(const ListsScreen()));
       await tester.pumpAndSettle();
 
-      await tester.tap(find.byKey(const Key('add_list')));
+      await tester.tap(find.byKey(const Key('drawer_menu')));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Add list'));
       await tester.pumpAndSettle();
       await tester.enterText(find.byType(TextField), 'New List');
       await tester.tap(find.text('Add'));
@@ -61,6 +63,8 @@ void main() {
 
       final lists = await listRepo.getLists();
       expect(lists.map((l) => l.name), contains('New List'));
+      // New list is selected (app bar) and appears in drawer.
+      expect(find.text('New List'), findsWidgets);
     });
 
     testWidgets('rename list: long-press then change name', (tester) async {
