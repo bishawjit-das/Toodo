@@ -19,6 +19,31 @@ class ListsScreen extends StatefulWidget {
 /// Default list name; always exists, cannot be renamed or deleted.
 const String _inboxName = 'Inbox';
 
+/// Virtual list keys (app-created, not in DB).
+const String _virtualAll = 'all';
+const String _virtualToday = 'today';
+const String _virtualTomorrow = 'tomorrow';
+const String _virtualNext7 = 'next7';
+const String _virtualCompleted = 'completed';
+const String _virtualTrash = 'trash';
+
+bool _isToday(DateTime d) {
+  final n = DateTime.now();
+  return d.year == n.year && d.month == n.month && d.day == n.day;
+}
+
+bool _isTomorrow(DateTime d) {
+  final t = DateTime.now().add(const Duration(days: 1));
+  return d.year == t.year && d.month == t.month && d.day == t.day;
+}
+
+bool _isInNext7Days(DateTime d) {
+  final now = DateTime.now();
+  final start = DateTime(now.year, now.month, now.day);
+  final end = start.add(const Duration(days: 7));
+  return !d.isBefore(start) && d.isBefore(end);
+}
+
 class _ListsScreenState extends State<ListsScreen> {
   ListRepository? _listRepo;
   TaskRepository? _taskRepo;
@@ -26,6 +51,8 @@ class _ListsScreenState extends State<ListsScreen> {
   late final Signal<List<Task>> _tasksSignal = signal<List<Task>>([]);
   StreamSubscription<List<ListRow>>? _sub;
   StreamSubscription<List<Task>>? _taskSub;
+  /// Virtual view: 'all', 'today', 'tomorrow', 'next7'. When null, a list is selected.
+  String? _selectedVirtualKey = _virtualAll;
   int? _selectedListId;
   bool _inboxEnsured = false;
 
@@ -55,10 +82,29 @@ class _ListsScreenState extends State<ListsScreen> {
     _taskSub?.cancel();
     final repo = _taskRepo;
     if (repo == null) return;
-    final stream = _selectedListId == null
-        ? repo.watchAllTasks()
-        : repo.watchTasksByListId(_selectedListId!);
-    _taskSub = stream.listen((data) => _tasksSignal.value = data);
+    if (_selectedVirtualKey != null) {
+      _taskSub = repo.watchAllTasks().listen((data) {
+        final key = _selectedVirtualKey;
+        if (key == _virtualAll) {
+          _tasksSignal.value = data;
+        } else if (key == _virtualCompleted) {
+          _tasksSignal.value = data.where((t) => t.completedAt != null).toList();
+        } else if (key == _virtualTrash) {
+          _tasksSignal.value = []; // No soft delete yet
+        } else {
+          _tasksSignal.value = data.where((t) {
+            final d = t.dueDate;
+            if (d == null) return false;
+            if (key == _virtualToday) return _isToday(d);
+            if (key == _virtualTomorrow) return _isTomorrow(d);
+            if (key == _virtualNext7) return _isInNext7Days(d);
+            return false;
+          }).toList();
+        }
+      });
+    } else {
+      _taskSub = repo.watchTasksByListId(_selectedListId!).listen((data) => _tasksSignal.value = data);
+    }
   }
 
   @override
@@ -71,7 +117,7 @@ class _ListsScreenState extends State<ListsScreen> {
   ListRepository get _repo => _listRepo!;
   TaskRepository get _taskRepository => _taskRepo!;
 
-  /// When "All" is selected, tasks go to Inbox. Inbox is always the default list.
+  /// When a virtual view is selected, new tasks go to Inbox.
   int? get _effectiveListId {
     if (_selectedListId != null) return _selectedListId;
     final lists = _listsSignal.value;
@@ -79,10 +125,19 @@ class _ListsScreenState extends State<ListsScreen> {
     return inbox?.id ?? lists.firstOrNull?.id;
   }
 
-  /// "All" is a virtual view (all tasks), not a list. Inbox is the default list name.
-  String _titleFor(int? id) {
-    if (id == null) return 'All';
-    final match = _listsSignal.value.where((l) => l.id == id);
+  String _titleFor() {
+    if (_selectedVirtualKey != null) {
+      switch (_selectedVirtualKey!) {
+        case _virtualAll: return 'All';
+        case _virtualToday: return 'Today';
+        case _virtualTomorrow: return 'Tomorrow';
+        case _virtualNext7: return 'Next 7 days';
+        case _virtualCompleted: return 'Completed';
+        case _virtualTrash: return 'Trash';
+        default: return 'All';
+      }
+    }
+    final match = _listsSignal.value.where((l) => l.id == _selectedListId);
     return match.isEmpty ? 'List' : match.first.name;
   }
 
@@ -100,7 +155,7 @@ class _ListsScreenState extends State<ListsScreen> {
         ),
         title: Watch(
           (context) =>
-              Text(_titleFor(_selectedListId), style: TextStyle(fontSize: 16)),
+              Text(_titleFor(), style: TextStyle(fontSize: 16)),
         ),
         actions: [
           IconButton(
@@ -112,9 +167,9 @@ class _ListsScreenState extends State<ListsScreen> {
       ),
       drawer: _buildDrawer(context),
       body: _buildTaskList(),
-      // Show FAB in All view (tasks go to Inbox) and when a list is selected.
+      // Show FAB for virtual views (tasks go to Inbox) and when a list is selected.
       floatingActionButton:
-          (_selectedListId == null || _effectiveListId != null)
+          (_selectedVirtualKey != null || _effectiveListId != null)
           ? FloatingActionButton(
               onPressed: _showAddTaskSheet,
               child: const Icon(Icons.add),
@@ -347,44 +402,115 @@ class _ListsScreenState extends State<ListsScreen> {
     );
   }
 
+  static const _drawerTileGap = 8.0;
+  static const _drawerTileLead = 32.0;
+
   Widget _buildDrawer(BuildContext context) {
+    void selectVirtual(String key) {
+      setState(() {
+        _selectedVirtualKey = key;
+        _selectedListId = null;
+      });
+      _subscribeToTasks();
+      Navigator.pop(context);
+    }
+
+    void selectList(int id) {
+      setState(() {
+        _selectedVirtualKey = null;
+        _selectedListId = id;
+      });
+      _subscribeToTasks();
+      Navigator.pop(context);
+    }
+
     return Drawer(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.zero),
       child: SafeArea(
         child: ListView(
           padding: EdgeInsets.zero,
           children: [
-            // "All" = virtual view of all tasks; not a list, cannot be renamed/deleted
-            ListTile(
-              title: const Text('All'),
-              selected: _selectedListId == null,
-              onTap: () {
-                setState(() => _selectedListId = null);
-                _subscribeToTasks();
-                Navigator.pop(context);
-              },
-            ),
+            // Section 1: Inbox, Today, Tomorrow, Next 7 days, All
             Watch((context) {
-              final lists = _listsSignal.value;
-              return Column(
-                children: lists
-                    .map(
-                      (list) => ListTile(
-                        title: Text(list.name),
-                        selected: _selectedListId == list.id,
-                        onTap: () {
-                          setState(() => _selectedListId = list.id);
-                          _subscribeToTasks();
-                          Navigator.pop(context);
-                        },
-                        onLongPress: list.name == _inboxName
-                            ? null
-                            : () => _showListOptions(context, list),
-                      ),
-                    )
-                    .toList(),
+              final inbox = _listsSignal.value.where((l) => l.name == _inboxName).firstOrNull;
+              if (inbox == null) return const SizedBox.shrink();
+              return ListTile(
+                leading: const Icon(Icons.inbox, size: 22),
+                title: const Text('Inbox'),
+                horizontalTitleGap: _drawerTileGap,
+                minLeadingWidth: _drawerTileLead,
+                selected: _selectedVirtualKey == null && _selectedListId == inbox.id,
+                onTap: () => selectList(inbox.id),
+                onLongPress: null,
               );
             }),
+            ListTile(
+              leading: const Icon(Icons.today, size: 22),
+              title: const Text('Today'),
+              horizontalTitleGap: _drawerTileGap,
+              minLeadingWidth: _drawerTileLead,
+              selected: _selectedVirtualKey == _virtualToday,
+              onTap: () => selectVirtual(_virtualToday),
+            ),
+            ListTile(
+              leading: const Icon(Icons.event, size: 22),
+              title: const Text('Tomorrow'),
+              horizontalTitleGap: _drawerTileGap,
+              minLeadingWidth: _drawerTileLead,
+              selected: _selectedVirtualKey == _virtualTomorrow,
+              onTap: () => selectVirtual(_virtualTomorrow),
+            ),
+            ListTile(
+              leading: const Icon(Icons.date_range, size: 22),
+              title: const Text('Next 7 days'),
+              horizontalTitleGap: _drawerTileGap,
+              minLeadingWidth: _drawerTileLead,
+              selected: _selectedVirtualKey == _virtualNext7,
+              onTap: () => selectVirtual(_virtualNext7),
+            ),
+            ListTile(
+              leading: const Icon(Icons.view_list, size: 22),
+              title: const Text('All'),
+              horizontalTitleGap: _drawerTileGap,
+              minLeadingWidth: _drawerTileLead,
+              selected: _selectedVirtualKey == _virtualAll,
+              onTap: () => selectVirtual(_virtualAll),
+            ),
+            const Divider(),
+            // Section 2: Custom lists
+            Watch((context) {
+              final userLists = _listsSignal.value.where((l) => l.name != _inboxName).toList();
+              if (userLists.isEmpty) return const SizedBox.shrink();
+              return Column(
+                children: userLists.map((list) => ListTile(
+                  leading: const Icon(Icons.list_alt, size: 22),
+                  title: Text(list.name),
+                  horizontalTitleGap: _drawerTileGap,
+                  minLeadingWidth: _drawerTileLead,
+                  selected: _selectedVirtualKey == null && _selectedListId == list.id,
+                  onTap: () => selectList(list.id),
+                  onLongPress: () => _showListOptions(context, list),
+                )).toList(),
+              );
+            }),
+            const Divider(),
+            // Section 3: Completed, Trash
+            ListTile(
+              leading: const Icon(Icons.check_circle_outline, size: 22),
+              title: const Text('Completed'),
+              horizontalTitleGap: _drawerTileGap,
+              minLeadingWidth: _drawerTileLead,
+              selected: _selectedVirtualKey == _virtualCompleted,
+              onTap: () => selectVirtual(_virtualCompleted),
+            ),
+            ListTile(
+              leading: const Icon(Icons.delete_outline, size: 22),
+              title: const Text('Trash'),
+              horizontalTitleGap: _drawerTileGap,
+              minLeadingWidth: _drawerTileLead,
+              selected: _selectedVirtualKey == _virtualTrash,
+              onTap: () => selectVirtual(_virtualTrash),
+            ),
             const Divider(),
             ListTile(
               leading: const Icon(Icons.calendar_month),
@@ -534,7 +660,11 @@ class _ListsScreenState extends State<ListsScreen> {
             onPressed: () {
               _repo.deleteList(list.id);
               if (_selectedListId == list.id) {
-                setState(() => _selectedListId = null);
+                setState(() {
+                  _selectedVirtualKey = _virtualAll;
+                  _selectedListId = null;
+                });
+                _subscribeToTasks();
               }
               if (ctx.mounted) Navigator.pop(ctx);
             },
