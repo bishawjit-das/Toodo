@@ -16,6 +16,9 @@ class ListsScreen extends StatefulWidget {
   State<ListsScreen> createState() => _ListsScreenState();
 }
 
+/// Default list name; always exists, cannot be renamed or deleted.
+const String _inboxName = 'Inbox';
+
 class _ListsScreenState extends State<ListsScreen> {
   ListRepository? _listRepo;
   TaskRepository? _taskRepo;
@@ -24,6 +27,7 @@ class _ListsScreenState extends State<ListsScreen> {
   StreamSubscription<List<ListRow>>? _sub;
   StreamSubscription<List<Task>>? _taskSub;
   int? _selectedListId;
+  bool _inboxEnsured = false;
 
   @override
   void didChangeDependencies() {
@@ -31,10 +35,15 @@ class _ListsScreenState extends State<ListsScreen> {
     final scope = RepositoryScope.of(context);
     if (_listRepo != scope.listRepository) {
       _sub?.cancel();
+      _inboxEnsured = false;
       _listRepo = scope.listRepository;
-      _sub = _listRepo!.watchLists().listen(
-        (data) => _listsSignal.value = data,
-      );
+      _sub = _listRepo!.watchLists().listen((data) {
+        if (data.isEmpty && !_inboxEnsured) {
+          _inboxEnsured = true;
+          _listRepo!.insertList(_inboxName);
+        }
+        _listsSignal.value = data;
+      });
     }
     if (_taskRepo != scope.taskRepository) {
       _taskRepo = scope.taskRepository;
@@ -62,10 +71,15 @@ class _ListsScreenState extends State<ListsScreen> {
   ListRepository get _repo => _listRepo!;
   TaskRepository get _taskRepository => _taskRepo!;
 
-  int? get _effectiveListId =>
-      _selectedListId ??
-      (_listsSignal.value.isNotEmpty ? _listsSignal.value.first.id : null);
+  /// When "All" is selected, tasks go to Inbox. Inbox is always the default list.
+  int? get _effectiveListId {
+    if (_selectedListId != null) return _selectedListId;
+    final lists = _listsSignal.value;
+    final inbox = lists.where((l) => l.name == _inboxName).firstOrNull;
+    return inbox?.id ?? lists.firstOrNull?.id;
+  }
 
+  /// "All" is a virtual view (all tasks), not a list. Inbox is the default list name.
   String _titleFor(int? id) {
     if (id == null) return 'All';
     final match = _listsSignal.value.where((l) => l.id == id);
@@ -76,6 +90,7 @@ class _ListsScreenState extends State<ListsScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
+        titleSpacing: 0,
         leading: Builder(
           builder: (ctx) => IconButton(
             key: const Key('drawer_menu'),
@@ -89,6 +104,7 @@ class _ListsScreenState extends State<ListsScreen> {
         ),
         actions: [
           IconButton(
+            key: const Key('add_list'),
             icon: const Icon(Icons.add),
             onPressed: _showAddListDialog,
           ),
@@ -96,9 +112,11 @@ class _ListsScreenState extends State<ListsScreen> {
       ),
       drawer: _buildDrawer(context),
       body: _buildTaskList(),
-      floatingActionButton: _effectiveListId != null
+      // Show FAB in All view (tasks go to Inbox) and when a list is selected.
+      floatingActionButton:
+          (_selectedListId == null || _effectiveListId != null)
           ? FloatingActionButton(
-              onPressed: _showAddTaskDialog,
+              onPressed: _showAddTaskSheet,
               child: const Icon(Icons.add),
             )
           : null,
@@ -109,13 +127,7 @@ class _ListsScreenState extends State<ListsScreen> {
     return Watch((context) {
       final tasks = _tasksSignal.value;
       if (tasks.isEmpty) {
-        return Center(
-          child: Text(
-            _effectiveListId == null
-                ? 'Select a list to add tasks'
-                : 'No tasks',
-          ),
-        );
+        return const Center(child: Text('No tasks'));
       }
       return ListView.builder(
         itemCount: tasks.length,
@@ -124,6 +136,8 @@ class _ListsScreenState extends State<ListsScreen> {
           return ListTile(
             contentPadding: const EdgeInsets.symmetric(horizontal: 4),
             dense: true,
+            horizontalTitleGap: 4,
+            minLeadingWidth: 32,
             leading: Checkbox(
               value: task.completedAt != null,
               onChanged: (_) => _toggleTask(task),
@@ -158,7 +172,7 @@ class _ListsScreenState extends State<ListsScreen> {
     }
   }
 
-  void _showAddTaskDialog() {
+  void _showAddTaskSheet() {
     final listId = _effectiveListId;
     if (listId == null) return;
     if (Scaffold.maybeOf(context)?.isDrawerOpen ?? false) {
@@ -167,7 +181,7 @@ class _ListsScreenState extends State<ListsScreen> {
     final titleController = TextEditingController();
     DateTime? dueDate;
     DateTime? reminder;
-    showDialog<void>(
+    showModalBottomSheet<void>(
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDialogState) => AlertDialog(
@@ -340,12 +354,14 @@ class _ListsScreenState extends State<ListsScreen> {
         child: ListView(
           padding: EdgeInsets.zero,
           children: [
+            // "All" = virtual view of all tasks; not a list, cannot be renamed/deleted
             ListTile(
               title: const Text('All'),
               selected: _selectedListId == null,
               onTap: () {
                 setState(() => _selectedListId = null);
                 _subscribeToTasks();
+                Navigator.pop(context);
               },
             ),
             Watch((context) {
@@ -359,8 +375,11 @@ class _ListsScreenState extends State<ListsScreen> {
                         onTap: () {
                           setState(() => _selectedListId = list.id);
                           _subscribeToTasks();
+                          Navigator.pop(context);
                         },
-                        onLongPress: () => _showListOptions(context, list),
+                        onLongPress: list.name == _inboxName
+                            ? null
+                            : () => _showListOptions(context, list),
                       ),
                     )
                     .toList(),
@@ -370,6 +389,8 @@ class _ListsScreenState extends State<ListsScreen> {
             ListTile(
               leading: const Icon(Icons.calendar_month),
               title: const Text('Calendar'),
+              horizontalTitleGap: 8,
+              minLeadingWidth: 32,
               onTap: () {
                 Navigator.pop(context);
                 context.go('/calendar');
@@ -378,6 +399,8 @@ class _ListsScreenState extends State<ListsScreen> {
             ListTile(
               leading: const Icon(Icons.settings),
               title: const Text('Settings'),
+              horizontalTitleGap: 8,
+              minLeadingWidth: 32,
               onTap: () {
                 Navigator.pop(context);
                 context.go('/settings');
@@ -387,6 +410,8 @@ class _ListsScreenState extends State<ListsScreen> {
             ListTile(
               leading: const Icon(Icons.add),
               title: const Text('Add list'),
+              horizontalTitleGap: 8,
+              minLeadingWidth: 32,
               onTap: _showAddListDialog,
             ),
           ],

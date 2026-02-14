@@ -53,7 +53,7 @@ void main() {
       await tester.pumpWidget(wrapWithScope(const ListsScreen()));
       await tester.pumpAndSettle();
 
-      await tester.tap(find.byIcon(Icons.add));
+      await tester.tap(find.byKey(const Key('add_list')));
       await tester.pumpAndSettle();
       await tester.enterText(find.byType(TextField), 'New List');
       await tester.tap(find.text('Add'));
