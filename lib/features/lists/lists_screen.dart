@@ -44,13 +44,14 @@ bool _isInNext7Days(DateTime d) {
   return !d.isBefore(start) && d.isBefore(end);
 }
 
-class _ListsScreenState extends State<ListsScreen> {
+class _ListsScreenState extends State<ListsScreen> with WidgetsBindingObserver {
   ListRepository? _listRepo;
   TaskRepository? _taskRepo;
   late final Signal<List<ListRow>> _listsSignal = signal<List<ListRow>>([]);
   late final Signal<List<Task>> _tasksSignal = signal<List<Task>>([]);
   StreamSubscription<List<ListRow>>? _sub;
   StreamSubscription<List<Task>>? _taskSub;
+  bool _ignoreNextTaskEmission = false;
 
   /// Virtual view: 'all', 'today', 'tomorrow', 'next7'. When null, a list is selected.
   String? _selectedVirtualKey = _virtualAll;
@@ -62,6 +63,12 @@ class _ListsScreenState extends State<ListsScreen> {
   String? _createdListName;
 
   final _scaffoldKey = GlobalKey<ScaffoldState>();
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
 
   @override
   void didChangeDependencies() {
@@ -89,41 +96,77 @@ class _ListsScreenState extends State<ListsScreen> {
     _subscribeToTasks();
   }
 
+  void _applyTaskFilter(List<Task> data) {
+    if (_ignoreNextTaskEmission) {
+      _ignoreNextTaskEmission = false;
+      return;
+    }
+    if (_selectedVirtualKey != null) {
+      final key = _selectedVirtualKey!;
+      if (key == _virtualAll) {
+        _tasksSignal.value = data.where((t) => t.completedAt == null).toList();
+      } else if (key == _virtualCompleted) {
+        _tasksSignal.value = data.where((t) => t.completedAt != null).toList();
+      } else if (key == _virtualTrash) {
+        _tasksSignal.value = [];
+      } else {
+        _tasksSignal.value = data.where((t) {
+          if (t.completedAt != null) return false;
+          final d = t.dueDate;
+          if (d == null) return false;
+          if (key == _virtualToday) return _isToday(d);
+          if (key == _virtualTomorrow) return _isTomorrow(d);
+          if (key == _virtualNext7) return _isInNext7Days(d);
+          return false;
+        }).toList();
+      }
+    } else {
+      _tasksSignal.value = data.where((t) => t.completedAt == null).toList();
+    }
+  }
+
   void _subscribeToTasks() {
     _taskSub?.cancel();
     final repo = _taskRepo;
     if (repo == null) return;
     if (_selectedVirtualKey != null) {
-      _taskSub = repo.watchAllTasks().listen((data) {
-        final key = _selectedVirtualKey;
-        if (key == _virtualAll) {
-          _tasksSignal.value = data;
-        } else if (key == _virtualCompleted) {
-          _tasksSignal.value = data
-              .where((t) => t.completedAt != null)
-              .toList();
-        } else if (key == _virtualTrash) {
-          _tasksSignal.value = []; // No soft delete yet
-        } else {
-          _tasksSignal.value = data.where((t) {
-            final d = t.dueDate;
-            if (d == null) return false;
-            if (key == _virtualToday) return _isToday(d);
-            if (key == _virtualTomorrow) return _isTomorrow(d);
-            if (key == _virtualNext7) return _isInNext7Days(d);
-            return false;
-          }).toList();
-        }
-      });
+      _taskSub = repo.watchAllTasks().listen(_applyTaskFilter);
     } else {
       _taskSub = repo
           .watchTasksByListId(_selectedListId!)
-          .listen((data) => _tasksSignal.value = data);
+          .listen(_applyTaskFilter);
+    }
+  }
+
+  /// On resume: read with a fresh DB connection so we see background isolate writes (WAL visibility), then re-subscribe.
+  Future<void> _refreshTasksThenResubscribe() async {
+    final repo = _taskRepo;
+    if (repo == null) return;
+    List<Task> data;
+    if (_selectedVirtualKey != null) {
+      data = await repo.getAllTasksFresh();
+    } else {
+      final listId = _selectedListId;
+      if (listId == null) return;
+      data = await repo.getTasksByListIdFresh(listId);
+    }
+    if (!mounted) return;
+    _applyTaskFilter(data);
+    _ignoreNextTaskEmission =
+        true; // stream's first emission is from main connection (may be stale)
+    _subscribeToTasks();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _refreshTasksThenResubscribe();
     }
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _sub?.cancel();
     _taskSub?.cancel();
     super.dispose();
@@ -179,7 +222,7 @@ class _ListsScreenState extends State<ListsScreen> {
           onPressed: () => _scaffoldKey.currentState?.openDrawer(),
         ),
         title: Watch(
-          (context) => Text(_titleFor(), style: TextStyle(fontSize: 16)),
+          (context) => Text(_titleFor(), style: TextStyle(fontSize: 18)),
         ),
         actions: [
           IconButton(
@@ -206,7 +249,9 @@ class _ListsScreenState extends State<ListsScreen> {
     return Watch((context) {
       final tasks = _tasksSignal.value;
       if (tasks.isEmpty) {
-        return const Center(child: Text('No tasks'));
+        return const Center(
+          child: Text('No tasks', style: TextStyle(fontSize: 16)),
+        );
       }
       return ListView.builder(
         itemCount: tasks.length,
@@ -224,13 +269,14 @@ class _ListsScreenState extends State<ListsScreen> {
             title: Text(
               task.title,
               style: TextStyle(
+                fontSize: 16,
                 decoration: task.completedAt != null
                     ? TextDecoration.lineThrough
                     : null,
               ),
             ),
             subtitle: task.dueDate != null
-                ? Text(_formatDate(task.dueDate!))
+                ? Text(_formatDueDate(task.dueDate!))
                 : null,
             onTap: () => _showEditTaskSheet(task),
             onLongPress: () => _showTaskOptions(context, task),
@@ -245,6 +291,37 @@ class _ListsScreenState extends State<ListsScreen> {
 
   String _formatDateTime(DateTime d) =>
       '${_formatDate(d)} ${d.hour.toString().padLeft(2, '0')}:${d.minute.toString().padLeft(2, '0')}';
+
+  static const _monthNames = [
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
+  ];
+
+  String _formatDueDate(DateTime d) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final tomorrow = today.add(const Duration(days: 1));
+    final dDate = DateTime(d.year, d.month, d.day);
+    final hasTime = d.hour != 0 || d.minute != 0;
+    final hour12 = d.hour == 0 ? 12 : (d.hour > 12 ? d.hour - 12 : d.hour);
+    final ampm = d.hour < 12 ? 'am' : 'pm';
+    final timeStr = hasTime
+        ? ' $hour12:${d.minute.toString().padLeft(2, '0')} $ampm'
+        : '';
+    if (dDate == today) return 'Today$timeStr';
+    if (dDate == tomorrow) return 'Tomorrow$timeStr';
+    return '${_monthNames[d.month - 1]} ${d.day}$timeStr';
+  }
 
   void _toggleTask(Task task) {
     if (task.completedAt != null) {
@@ -261,128 +338,235 @@ class _ListsScreenState extends State<ListsScreen> {
       Navigator.of(context).pop();
     }
     final titleController = TextEditingController();
+    final notesController = TextEditingController();
     DateTime? dueDate;
     DateTime? reminder;
+    Future<Null> pickDueDate(
+      BuildContext ctx,
+      void Function(void Function()) setSheetState,
+    ) async {
+      final now = DateTime.now();
+      final picked = await showDatePicker(
+        context: context,
+        initialDate: dueDate ?? now,
+        firstDate: DateTime(2000),
+        lastDate: DateTime(2100),
+      );
+      if (picked == null) return;
+      if (!mounted) return;
+      final time = await showTimePicker(
+        context: context,
+        initialTime: dueDate != null
+            ? TimeOfDay.fromDateTime(dueDate!)
+            : TimeOfDay.fromDateTime(now),
+      );
+      if (time != null && mounted) {
+        setSheetState(
+          () => dueDate = DateTime(
+            picked.year,
+            picked.month,
+            picked.day,
+            time.hour,
+            time.minute,
+          ),
+        );
+      }
+    }
+
+    Future<Null> pickReminder(
+      BuildContext ctx,
+      void Function(void Function()) setSheetState,
+    ) async {
+      final now = DateTime.now();
+      final date = await showDatePicker(
+        context: context,
+        initialDate: reminder ?? now,
+        firstDate: DateTime(2000),
+        lastDate: DateTime(2100),
+      );
+      if (date == null) return;
+      if (!mounted) return;
+      final time = await showTimePicker(
+        context: context,
+        initialTime: reminder != null
+            ? TimeOfDay.fromDateTime(reminder!)
+            : TimeOfDay.fromDateTime(now),
+      );
+      if (time != null && mounted) {
+        setSheetState(
+          () => reminder = DateTime(
+            date.year,
+            date.month,
+            date.day,
+            time.hour,
+            time.minute,
+          ),
+        );
+      }
+    }
+
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
+      backgroundColor: Colors.transparent,
       builder: (ctx) => Padding(
         padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
-        child: SafeArea(
-          child: StatefulBuilder(
-            builder: (ctx, setSheetState) => Padding(
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  const Text(
-                    'New task',
-                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
-                  ),
-                  const SizedBox(height: 16),
-                  TextField(
-                    controller: titleController,
-                    autofocus: true,
-                    decoration: const InputDecoration(
-                      hintText: 'Task name',
-                      border: OutlineInputBorder(),
-                      isDense: true,
-                    ),
-                    onSubmitted: (_) => _addTask(
-                      ctx,
-                      listId,
-                      titleController.text,
-                      dueDate,
-                      reminder,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    title: Text(
-                      dueDate == null ? 'Due date' : _formatDateTime(dueDate!),
-                    ),
-                    trailing: const Icon(Icons.calendar_today, size: 22),
-                    onTap: () async {
-                      final now = DateTime.now();
-                      final picked = await showDatePicker(
-                        context: context,
-                        initialDate: dueDate ?? now,
-                        firstDate: DateTime(2000),
-                        lastDate: DateTime(2100),
-                      );
-                      if (picked == null) return;
-                      if (!mounted) return;
-                      final time = await showTimePicker(
-                        context: context,
-                        initialTime: dueDate != null
-                            ? TimeOfDay.fromDateTime(dueDate!)
-                            : TimeOfDay.fromDateTime(now),
-                      );
-                      if (time != null && mounted) {
-                        setSheetState(
-                          () => dueDate = DateTime(
-                            picked.year,
-                            picked.month,
-                            picked.day,
-                            time.hour,
-                            time.minute,
-                          ),
-                        );
-                      }
-                    },
-                  ),
-                  ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    title: Text(
-                      reminder == null
-                          ? 'Reminder'
-                          : _formatDateTime(reminder!),
-                    ),
-                    trailing: const Icon(Icons.notifications, size: 22),
-                    onTap: () async {
-                      final now = DateTime.now();
-                      final date = await showDatePicker(
-                        context: context,
-                        initialDate: reminder ?? now,
-                        firstDate: DateTime(2000),
-                        lastDate: DateTime(2100),
-                      );
-                      if (date == null) return;
-                      if (!mounted) return;
-                      final time = await showTimePicker(
-                        context: context,
-                        initialTime: reminder != null
-                            ? TimeOfDay.fromDateTime(reminder!)
-                            : TimeOfDay.fromDateTime(now),
-                      );
-                      if (time != null && mounted) {
-                        setSheetState(
-                          () => reminder = DateTime(
-                            date.year,
-                            date.month,
-                            date.day,
-                            time.hour,
-                            time.minute,
-                          ),
-                        );
-                      }
-                    },
-                  ),
-                  const SizedBox(height: 16),
-                  FilledButton(
-                    onPressed: () => _addTask(
-                      ctx,
-                      listId,
-                      titleController.text,
-                      dueDate,
-                      reminder,
-                    ),
-                    child: const Text('Add'),
-                  ),
-                ],
+        child: StatefulBuilder(
+          builder: (ctx, setSheetState) => Container(
+            decoration: BoxDecoration(
+              color: Theme.of(ctx).colorScheme.surface,
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(12),
               ),
+            ),
+            padding: EdgeInsets.fromLTRB(
+              20,
+              16,
+              20,
+              16 + MediaQuery.of(ctx).padding.bottom,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                TextField(
+                  controller: titleController,
+                  autofocus: true,
+                  decoration: const InputDecoration(
+                    hintText: 'What would you like to do?',
+                    border: InputBorder.none,
+                    contentPadding: EdgeInsets.zero,
+                    isDense: true,
+                    hintStyle: TextStyle(fontSize: 14),
+                  ),
+                  textInputAction: TextInputAction.next,
+                  onSubmitted: (_) => _addTask(
+                    ctx,
+                    listId,
+                    titleController.text,
+                    notesController.text.trim().isEmpty
+                        ? null
+                        : notesController.text.trim(),
+                    dueDate,
+                    reminder,
+                  ),
+                ),
+                TextField(
+                  controller: notesController,
+                  decoration: const InputDecoration(
+                    hintText: 'Description',
+                    border: InputBorder.none,
+                    contentPadding: EdgeInsets.zero,
+                    isDense: true,
+                    hintStyle: TextStyle(fontSize: 13, color: Colors.grey),
+                  ),
+                  maxLines: 2,
+                  minLines: 1,
+                  textInputAction: TextInputAction.done,
+                  onSubmitted: (_) => _addTask(
+                    ctx,
+                    listId,
+                    titleController.text,
+                    notesController.text.trim().isEmpty
+                        ? null
+                        : notesController.text.trim(),
+                    dueDate,
+                    reminder,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    InkWell(
+                      borderRadius: BorderRadius.circular(20),
+                      onTap: () => pickDueDate(ctx, setSheetState),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 4,
+                          vertical: 8,
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              dueDate != null
+                                  ? Icons.calendar_today
+                                  : Icons.calendar_today_outlined,
+                              size: 22,
+                              color: dueDate != null
+                                  ? Theme.of(ctx).colorScheme.primary
+                                  : Theme.of(ctx).colorScheme.onSurfaceVariant,
+                            ),
+                            if (dueDate != null) ...[
+                              const SizedBox(width: 6),
+                              Text(
+                                _formatDueDate(dueDate!),
+                                style: Theme.of(ctx).textTheme.bodySmall
+                                    ?.copyWith(
+                                      color: Theme.of(ctx).colorScheme.primary,
+                                    ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    InkWell(
+                      borderRadius: BorderRadius.circular(20),
+                      onTap: () => pickReminder(ctx, setSheetState),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 4,
+                          vertical: 8,
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              reminder != null
+                                  ? Icons.notifications
+                                  : Icons.notifications_outlined,
+                              size: 22,
+                              color: reminder != null
+                                  ? Theme.of(ctx).colorScheme.primary
+                                  : Theme.of(ctx).colorScheme.onSurfaceVariant,
+                            ),
+                            if (reminder != null) ...[
+                              const SizedBox(width: 6),
+                              Text(
+                                _formatDueDate(reminder!),
+                                style: Theme.of(ctx).textTheme.bodySmall
+                                    ?.copyWith(
+                                      color: Theme.of(ctx).colorScheme.primary,
+                                    ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ),
+                    const Spacer(),
+                    IconButton.filled(
+                      style: IconButton.styleFrom(
+                        backgroundColor: Theme.of(ctx).colorScheme.primary,
+                      ),
+                      icon: const Icon(Icons.check, color: Colors.white),
+                      tooltip: 'Add task',
+                      onPressed: () => _addTask(
+                        ctx,
+                        listId,
+                        titleController.text,
+                        notesController.text.trim().isEmpty
+                            ? null
+                            : notesController.text.trim(),
+                        dueDate,
+                        reminder,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ),
           ),
         ),
@@ -394,13 +578,20 @@ class _ListsScreenState extends State<ListsScreen> {
     BuildContext ctx,
     int listId,
     String title,
+    String? notes,
     DateTime? dueDate,
     DateTime? reminder,
   ) {
     if (title.trim().isEmpty) return;
     final notificationService = RepositoryScope.of(ctx).notificationService;
     _taskRepository
-        .insertTask(listId, title.trim(), dueDate: dueDate, reminder: reminder)
+        .insertTask(
+          listId,
+          title.trim(),
+          notes: notes,
+          dueDate: dueDate,
+          reminder: reminder,
+        )
         .then((id) {
           if (reminder != null) {
             notificationService.scheduleReminder(id, title.trim(), reminder);
@@ -413,12 +604,14 @@ class _ListsScreenState extends State<ListsScreen> {
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
+      backgroundColor: Colors.transparent,
       builder: (ctx) => _TaskEditSheetContent(
         task: task,
         taskRepo: _taskRepository,
         notificationService: RepositoryScope.of(context).notificationService,
         formatDate: _formatDate,
         formatDateTime: _formatDateTime,
+        formatDueDate: _formatDueDate,
       ),
     );
   }
@@ -792,6 +985,7 @@ class _TaskEditSheetContent extends StatefulWidget {
     required this.notificationService,
     required this.formatDate,
     required this.formatDateTime,
+    required this.formatDueDate,
   });
 
   final Task task;
@@ -799,6 +993,7 @@ class _TaskEditSheetContent extends StatefulWidget {
   final NotificationService notificationService;
   final String Function(DateTime) formatDate;
   final String Function(DateTime) formatDateTime;
+  final String Function(DateTime) formatDueDate;
 
   @override
   State<_TaskEditSheetContent> createState() => _TaskEditSheetContentState();
@@ -837,105 +1032,224 @@ class _TaskEditSheetContentState extends State<_TaskEditSheetContent> {
     super.dispose();
   }
 
+  Future<void> _pickDueDate() async {
+    final now = DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _dueDate ?? now,
+      firstDate: DateTime(2000),
+      lastDate: DateTime(2100),
+    );
+    if (picked == null) return;
+    if (!mounted) return;
+    final time = await showTimePicker(
+      context: context,
+      initialTime: _dueDate != null
+          ? TimeOfDay.fromDateTime(_dueDate!)
+          : TimeOfDay.fromDateTime(now),
+    );
+    if (time != null && mounted) {
+      setState(
+        () => _dueDate = DateTime(
+          picked.year,
+          picked.month,
+          picked.day,
+          time.hour,
+          time.minute,
+        ),
+      );
+    }
+  }
+
+  Future<void> _pickReminder() async {
+    final now = DateTime.now();
+    final date = await showDatePicker(
+      context: context,
+      initialDate: _reminder ?? now,
+      firstDate: DateTime(2000),
+      lastDate: DateTime(2100),
+    );
+    if (date == null) return;
+    if (!mounted) return;
+    final time = await showTimePicker(
+      context: context,
+      initialTime: _reminder != null
+          ? TimeOfDay.fromDateTime(_reminder!)
+          : TimeOfDay.fromDateTime(now),
+    );
+    if (time != null && mounted) {
+      setState(
+        () => _reminder = DateTime(
+          date.year,
+          date.month,
+          date.day,
+          time.hour,
+          time.minute,
+        ),
+      );
+    }
+  }
+
+  Future<void> _saveTask() async {
+    final id = widget.task.id;
+    final title = _titleController.text.trim();
+    widget.notificationService.cancelReminder(id);
+    await widget.taskRepo.updateTask(
+      id,
+      title: title,
+      notes: _notesController.text.trim().isEmpty
+          ? null
+          : _notesController.text.trim(),
+      dueDate: _dueDate,
+      reminder: _reminder,
+    );
+    if (_reminder != null) {
+      widget.notificationService.scheduleReminder(id, title, _reminder!);
+    }
+    if (mounted) Navigator.pop(context);
+  }
+
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     return Padding(
       padding: EdgeInsets.only(
         bottom: MediaQuery.of(context).viewInsets.bottom,
       ),
-      child: SafeArea(
+      child: Container(
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surface,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+        ),
+        padding: EdgeInsets.fromLTRB(
+          20,
+          16,
+          20,
+          16 + MediaQuery.of(context).padding.bottom,
+        ),
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(16),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               TextField(
                 controller: _titleController,
-                decoration: const InputDecoration(labelText: 'Title'),
+                decoration: const InputDecoration(
+                  hintText: 'What would you like to do?',
+                  border: InputBorder.none,
+                  contentPadding: EdgeInsets.zero,
+                  isDense: true,
+                  hintStyle: TextStyle(fontSize: 14),
+                ),
+                textInputAction: TextInputAction.next,
               ),
               TextField(
                 controller: _notesController,
-                decoration: const InputDecoration(labelText: 'Notes'),
+                decoration: const InputDecoration(
+                  hintText: 'Description',
+                  border: InputBorder.none,
+                  contentPadding: EdgeInsets.zero,
+                  isDense: true,
+                  hintStyle: TextStyle(fontSize: 13, color: Colors.grey),
+                ),
                 maxLines: 2,
+                minLines: 1,
+                textInputAction: TextInputAction.done,
               ),
-              ListTile(
-                title: Text(
-                  _dueDate == null
-                      ? 'Due date'
-                      : widget.formatDateTime(_dueDate!),
-                ),
-                onTap: () async {
-                  final now = DateTime.now();
-                  final picked = await showDatePicker(
-                    context: context,
-                    initialDate: _dueDate ?? now,
-                    firstDate: DateTime(2000),
-                    lastDate: DateTime(2100),
-                  );
-                  if (picked == null) return;
-                  if (!context.mounted) return;
-                  final time = await showTimePicker(
-                    context: context,
-                    initialTime: _dueDate != null
-                        ? TimeOfDay.fromDateTime(_dueDate!)
-                        : TimeOfDay.fromDateTime(now),
-                  );
-                  if (time != null && mounted) {
-                    setState(
-                      () => _dueDate = DateTime(
-                        picked.year,
-                        picked.month,
-                        picked.day,
-                        time.hour,
-                        time.minute,
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  InkWell(
+                    borderRadius: BorderRadius.circular(20),
+                    onTap: _pickDueDate,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 4,
+                        vertical: 8,
                       ),
-                    );
-                  }
-                },
-              ),
-              ListTile(
-                title: Text(
-                  _reminder == null
-                      ? 'Reminder'
-                      : widget.formatDateTime(_reminder!),
-                ),
-                onTap: () async {
-                  final now = DateTime.now();
-                  final date = await showDatePicker(
-                    context: context,
-                    initialDate: _reminder ?? now,
-                    firstDate: DateTime(2000),
-                    lastDate: DateTime(2100),
-                  );
-                  if (date == null) return;
-                  if (!context.mounted) return;
-                  final time = await showTimePicker(
-                    context: context,
-                    initialTime: _reminder != null
-                        ? TimeOfDay.fromDateTime(_reminder!)
-                        : TimeOfDay.fromDateTime(now),
-                  );
-                  if (time != null && mounted) {
-                    setState(
-                      () => _reminder = DateTime(
-                        date.year,
-                        date.month,
-                        date.day,
-                        time.hour,
-                        time.minute,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            _dueDate != null
+                                ? Icons.calendar_today
+                                : Icons.calendar_today_outlined,
+                            size: 22,
+                            color: _dueDate != null
+                                ? theme.colorScheme.primary
+                                : theme.colorScheme.onSurfaceVariant,
+                          ),
+                          if (_dueDate != null) ...[
+                            const SizedBox(width: 6),
+                            Text(
+                              widget.formatDueDate(_dueDate!),
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: theme.colorScheme.primary,
+                              ),
+                            ),
+                          ],
+                        ],
                       ),
-                    );
-                  }
-                },
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  InkWell(
+                    borderRadius: BorderRadius.circular(20),
+                    onTap: _pickReminder,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 4,
+                        vertical: 8,
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            _reminder != null
+                                ? Icons.notifications
+                                : Icons.notifications_outlined,
+                            size: 22,
+                            color: _reminder != null
+                                ? theme.colorScheme.primary
+                                : theme.colorScheme.onSurfaceVariant,
+                          ),
+                          if (_reminder != null) ...[
+                            const SizedBox(width: 6),
+                            Text(
+                              widget.formatDueDate(_reminder!),
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: theme.colorScheme.primary,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ),
+                  const Spacer(),
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text('Cancel'),
+                  ),
+                  IconButton.filled(
+                    style: IconButton.styleFrom(
+                      backgroundColor: theme.colorScheme.primary,
+                    ),
+                    icon: const Icon(Icons.check, color: Colors.white),
+                    tooltip: 'Save',
+                    onPressed: _saveTask,
+                  ),
+                ],
               ),
-              const Divider(),
-              Text('Subtasks', style: Theme.of(context).textTheme.titleSmall),
+              const Divider(height: 24),
+              Text('Subtasks', style: theme.textTheme.titleSmall),
+              const SizedBox(height: 4),
               ..._subtasks.map(
                 (t) => ListTile(
+                  contentPadding: EdgeInsets.zero,
                   title: Text(t.title),
                   trailing: IconButton(
-                    icon: const Icon(Icons.close),
+                    icon: const Icon(Icons.close, size: 20),
                     onPressed: () async {
                       await widget.taskRepo.deleteTask(t.id);
                       _loadSubtasks();
@@ -950,6 +1264,9 @@ class _TaskEditSheetContentState extends State<_TaskEditSheetContent> {
                       controller: _subtaskController,
                       decoration: const InputDecoration(
                         hintText: 'Add subtask',
+                        border: InputBorder.none,
+                        contentPadding: EdgeInsets.zero,
+                        isDense: true,
                       ),
                       onSubmitted: (_) => _addSubtask(),
                     ),
@@ -957,41 +1274,6 @@ class _TaskEditSheetContentState extends State<_TaskEditSheetContent> {
                   IconButton(
                     icon: const Icon(Icons.add),
                     onPressed: _addSubtask,
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  TextButton(
-                    onPressed: () => Navigator.pop(context),
-                    child: const Text('Cancel'),
-                  ),
-                  FilledButton(
-                    onPressed: () async {
-                      final id = widget.task.id;
-                      final title = _titleController.text.trim();
-                      widget.notificationService.cancelReminder(id);
-                      await widget.taskRepo.updateTask(
-                        id,
-                        title: title,
-                        notes: _notesController.text.trim().isEmpty
-                            ? null
-                            : _notesController.text.trim(),
-                        dueDate: _dueDate,
-                        reminder: _reminder,
-                      );
-                      if (_reminder != null) {
-                        widget.notificationService.scheduleReminder(
-                          id,
-                          title,
-                          _reminder!,
-                        );
-                      }
-                      if (context.mounted) Navigator.pop(context);
-                    },
-                    child: const Text('Save'),
                   ),
                 ],
               ),

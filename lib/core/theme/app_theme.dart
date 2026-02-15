@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 /// Font for app. Use 'Google Sans' if you add it under [flutter/fonts] in pubspec; else DM Sans from package.
-const String _appFontFamily = 'Outfit';
+const String _appFontFamily = 'Google Sans';
 
 TextStyle _withColor(TextStyle? s, Color color) {
   if (s == null) return TextStyle(fontSize: 14, color: color);

@@ -16,7 +16,9 @@ void main() async {
   final listRepo = ListRepository(db);
   final taskRepo = TaskRepository(db);
   final notificationService = NotificationService();
+  notificationService.onCompleteTask = (taskId) => taskRepo.completeTask(taskId);
   await notificationService.init();
+  await notificationService.handleLaunchFromNotification();
   final settingsRepo = SettingsRepository(prefs);
   final themeModeNotifier = ValueNotifier<ThemeMode>(settingsRepo.themeMode);
   runApp(RepositoryScope(

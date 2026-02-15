@@ -37,10 +37,46 @@ class AppDatabase extends _$AppDatabase {
 
   static QueryExecutor _openLazy() {
     return LazyDatabase(() async {
-      final dir = await getApplicationDocumentsDirectory();
-      final file = File(p.join(dir.path, 'toodo.db'));
+      final file = await databaseFile;
       return NativeDatabase.createInBackground(file);
     });
+  }
+
+  /// Path to the DB file (for opening a fresh connection to see external writes).
+  static Future<File> get databaseFile async {
+    final dir = await getApplicationDocumentsDirectory();
+    return File(p.join(dir.path, 'toodo.db'));
+  }
+
+  /// One-shot read with a new connection so we see writes from another isolate (e.g. notification background).
+  static Future<List<Task>> getAllTasksFresh() async {
+    final file = await databaseFile;
+    final db = AppDatabase(NativeDatabase.createInBackground(file));
+    try {
+      return await (db.select(db.tasks)
+            ..where((t) => t.parentId.isNull())
+            ..orderBy([
+              (t) => OrderingTerm.asc(t.sortOrder),
+              (t) => OrderingTerm.asc(t.id),
+            ]))
+          .get();
+    } finally {
+      await db.close();
+    }
+  }
+
+  /// One-shot read with a new connection (see getAllTasksFresh).
+  static Future<List<Task>> getTasksByListIdFresh(int listId) async {
+    final file = await databaseFile;
+    final db = AppDatabase(NativeDatabase.createInBackground(file));
+    try {
+      return await (db.select(db.tasks)
+            ..where((t) => t.listId.equals(listId) & t.parentId.isNull())
+            ..orderBy([(t) => OrderingTerm.asc(t.sortOrder), (t) => OrderingTerm.asc(t.id)]))
+          .get();
+    } finally {
+      await db.close();
+    }
   }
 
   /// For tests: in-memory database.
