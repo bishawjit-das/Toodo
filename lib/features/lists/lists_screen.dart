@@ -825,37 +825,54 @@ class _ListsScreenState extends State<ListsScreen> with WidgetsBindingObserver {
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
+      backgroundColor: Colors.transparent,
       builder: (ctx) => Padding(
         padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
-        child: SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                const Text(
-                  'New list',
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
-                ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: controller,
-                  autofocus: true,
-                  decoration: const InputDecoration(
-                    hintText: 'List name',
-                    border: OutlineInputBorder(),
-                    isDense: true,
-                  ),
-                  onSubmitted: (_) => _addList(controller.text, ctx),
-                ),
-                const SizedBox(height: 16),
-                FilledButton(
-                  onPressed: () => _addList(controller.text, ctx),
-                  child: const Text('Add'),
-                ),
-              ],
+        child: Container(
+          decoration: BoxDecoration(
+            color: Theme.of(ctx).colorScheme.surface,
+            borderRadius: const BorderRadius.vertical(
+              top: Radius.circular(12),
             ),
+          ),
+          padding: EdgeInsets.fromLTRB(
+            20,
+            16,
+            20,
+            16 + MediaQuery.of(ctx).padding.bottom,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              TextField(
+                controller: controller,
+                autofocus: true,
+                decoration: const InputDecoration(
+                  hintText: 'List name',
+                  border: InputBorder.none,
+                  contentPadding: EdgeInsets.zero,
+                  isDense: true,
+                  hintStyle: TextStyle(fontSize: 14),
+                ),
+                textInputAction: TextInputAction.done,
+                onSubmitted: (_) => _addList(controller.text, ctx),
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  const Spacer(),
+                  IconButton.filled(
+                    style: IconButton.styleFrom(
+                      backgroundColor: Theme.of(ctx).colorScheme.primary,
+                    ),
+                    icon: const Icon(Icons.check, color: Colors.white),
+                    tooltip: 'Add list',
+                    onPressed: () => _addList(controller.text, ctx),
+                  ),
+                ],
+              ),
+            ],
           ),
         ),
       ),
