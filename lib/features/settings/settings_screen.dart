@@ -234,10 +234,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           color: c,
                           shape: BoxShape.circle,
                           border: Border.all(
-                            color: _accentColor.value == c.value
+                            color: _accentColor.toARGB32() == c.toARGB32()
                                 ? Theme.of(ctx).colorScheme.primary
                                 : Colors.grey,
-                            width: _accentColor.value == c.value ? 3 : 1,
+                            width: _accentColor.toARGB32() == c.toARGB32()
+                                ? 3
+                                : 1,
                           ),
                         ),
                       ),
@@ -264,7 +266,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   void _showHexColorDialog(BuildContext context) {
     final controller = TextEditingController(
       text:
-          '#${_accentColor.value.toRadixString(16).padLeft(8, '0').substring(2).toUpperCase()}',
+          '#${_accentColor.toARGB32().toRadixString(16).padLeft(8, '0').substring(2).toUpperCase()}',
     );
     showDialog<void>(
       context: context,

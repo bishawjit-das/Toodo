@@ -53,8 +53,9 @@ class SettingsRepository {
 
   ThemeMode get themeMode {
     final i = _prefs.getInt(_keyThemeMode);
-    if (i == null || i < 0 || i >= ThemeMode.values.length)
+    if (i == null || i < 0 || i >= ThemeMode.values.length) {
       return ThemeMode.system;
+    }
     return ThemeMode.values[i];
   }
 

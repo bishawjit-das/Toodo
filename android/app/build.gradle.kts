@@ -7,7 +7,7 @@ plugins {
 
 android {
     namespace = "com.example.toodo"
-    compileSdk = flutter.compileSdkVersion
+    compileSdk = 36
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
