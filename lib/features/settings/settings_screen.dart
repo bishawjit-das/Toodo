@@ -19,6 +19,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   int? _defaultListId;
   late SwipeAction _leftSwipeAction;
   late SwipeAction _rightSwipeAction;
+  late Color _accentColor;
   StreamSubscription<List<ListRow>>? _sub;
   final _listsSignal = signal<List<ListRow>>([]);
 
@@ -32,11 +33,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _defaultListId = settings.defaultListId;
       _leftSwipeAction = settings.leftSwipeAction;
       _rightSwipeAction = settings.rightSwipeAction;
+      _accentColor = settings.accentColor;
     } else {
       _themeMode = ThemeMode.system;
       _defaultListId = null;
       _leftSwipeAction = SwipeAction.trash;
       _rightSwipeAction = SwipeAction.edit;
+      _accentColor = predefinedAccentColors.first;
     }
     _sub?.cancel();
     _sub = scope.listRepository.watchLists().listen((data) {
@@ -104,6 +107,25 @@ class _SettingsScreenState extends State<SettingsScreen> {
             title: const Text('Right swipe'),
             subtitle: Text(_labelForSwipeAction(_rightSwipeAction)),
             onTap: () => _showSwipeActionPicker(context, isLeft: false),
+          ),
+          ListTile(
+            title: const Text('Accent color'),
+            subtitle: Row(
+              children: [
+                Container(
+                  width: 24,
+                  height: 24,
+                  decoration: BoxDecoration(
+                    color: _accentColor,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.grey),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                const Text('Tap to change'),
+              ],
+            ),
+            onTap: () => _showAccentColorPicker(context),
           ),
         ],
       ),
@@ -175,6 +197,118 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ),
       ),
     );
+  }
+
+  void _showAccentColorPicker(BuildContext context) {
+    showModalBottomSheet<void>(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const Text(
+                'Predefined',
+                style: TextStyle(fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 12,
+                runSpacing: 12,
+                children: [
+                  ...predefinedAccentColors.map(
+                    (c) => GestureDetector(
+                      onTap: () async {
+                        final scope = RepositoryScope.of(context);
+                        await scope.settingsRepository?.setAccentColor(c);
+                        scope.accentColorNotifier?.value = c;
+                        if (ctx.mounted) Navigator.pop(ctx);
+                        setState(() => _accentColor = c);
+                      },
+                      child: Container(
+                        width: 44,
+                        height: 44,
+                        decoration: BoxDecoration(
+                          color: c,
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: _accentColor.value == c.value
+                                ? Theme.of(ctx).colorScheme.primary
+                                : Colors.grey,
+                            width: _accentColor.value == c.value ? 3 : 1,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              ListTile(
+                leading: const Icon(Icons.palette_outlined),
+                title: const Text('Custom (hex)'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _showHexColorDialog(context);
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showHexColorDialog(BuildContext context) {
+    final controller = TextEditingController(
+      text:
+          '#${_accentColor.value.toRadixString(16).padLeft(8, '0').substring(2).toUpperCase()}',
+    );
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Custom accent color'),
+        content: TextField(
+          controller: controller,
+          decoration: const InputDecoration(
+            hintText: '#RRGGBB',
+            labelText: 'Hex color',
+          ),
+          autofocus: true,
+          onSubmitted: (_) => _applyHexColor(context, ctx, controller.text),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => _applyHexColor(context, ctx, controller.text),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _applyHexColor(
+    BuildContext context,
+    BuildContext dialogContext,
+    String hex,
+  ) {
+    final s = hex.trim().replaceFirst(RegExp(r'^#'), '');
+    if (s.length != 6) return;
+    final r = int.tryParse(s.substring(0, 2), radix: 16);
+    final g = int.tryParse(s.substring(2, 4), radix: 16);
+    final b = int.tryParse(s.substring(4, 6), radix: 16);
+    if (r == null || g == null || b == null) return;
+    final color = Color.fromRGBO(r, g, b, 1);
+    RepositoryScope.of(context).settingsRepository?.setAccentColor(color);
+    RepositoryScope.of(context).accentColorNotifier?.value = color;
+    setState(() => _accentColor = color);
+    Navigator.pop(dialogContext);
   }
 
   void _showDefaultListPicker(BuildContext context, List<ListRow> lists) {

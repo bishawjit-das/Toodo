@@ -12,6 +12,7 @@ class RepositoryScope extends InheritedWidget {
     required this.notificationService,
     this.settingsRepository,
     this.themeModeNotifier,
+    this.accentColorNotifier,
     required super.child,
   });
 
@@ -20,6 +21,7 @@ class RepositoryScope extends InheritedWidget {
   final NotificationService notificationService;
   final SettingsRepository? settingsRepository;
   final ValueNotifier<ThemeMode>? themeModeNotifier;
+  final ValueNotifier<Color>? accentColorNotifier;
 
   static RepositoryScope of(BuildContext context) {
     final scope = context.dependOnInheritedWidgetOfExactType<RepositoryScope>();
@@ -33,5 +35,6 @@ class RepositoryScope extends InheritedWidget {
       taskRepository != oldWidget.taskRepository ||
       notificationService != oldWidget.notificationService ||
       settingsRepository != oldWidget.settingsRepository ||
-      themeModeNotifier != oldWidget.themeModeNotifier;
+      themeModeNotifier != oldWidget.themeModeNotifier ||
+      accentColorNotifier != oldWidget.accentColorNotifier;
 }

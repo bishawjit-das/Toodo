@@ -4,6 +4,8 @@ import 'package:google_fonts/google_fonts.dart';
 /// Font for app. Use 'Google Sans' if you add it under [flutter/fonts] in pubspec; else DM Sans from package.
 const String _appFontFamily = 'Google Sans';
 
+const Color _defaultSeed = Color(0xFF6750A4);
+
 TextStyle _withColor(TextStyle? s, Color color) {
   if (s == null) return TextStyle(fontSize: 14, color: color);
   return s.copyWith(color: color);
@@ -40,78 +42,44 @@ TextTheme _compactTextTheme(ColorScheme scheme) {
   }
 }
 
-ThemeData get appTheme => ThemeData(
-  useMaterial3: true,
-  visualDensity: VisualDensity.compact,
-  colorScheme: ColorScheme.fromSeed(
-    seedColor: Colors.deepPurple,
-    brightness: Brightness.light,
-  ),
-  textTheme: _compactTextTheme(
-    ColorScheme.fromSeed(
-      seedColor: Colors.deepPurple,
-      brightness: Brightness.light,
+ThemeData _buildTheme(Color seedColor, Brightness brightness) {
+  final scheme = ColorScheme.fromSeed(
+    seedColor: seedColor,
+    brightness: brightness,
+  );
+  return ThemeData(
+    useMaterial3: true,
+    visualDensity: VisualDensity.compact,
+    colorScheme: scheme,
+    textTheme: _compactTextTheme(scheme),
+    listTileTheme: ListTileThemeData(
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 0),
+      minLeadingWidth: 40,
+      dense: true,
     ),
-  ),
-  listTileTheme: ListTileThemeData(
-    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 0),
-    minLeadingWidth: 40,
-    dense: true,
-  ),
-  appBarTheme: const AppBarTheme(
-    centerTitle: false,
-    scrolledUnderElevation: 0,
-    toolbarHeight: 48,
-  ),
-  floatingActionButtonTheme: const FloatingActionButtonThemeData(
-    smallSizeConstraints: BoxConstraints(minWidth: 40, minHeight: 40),
-  ),
-  inputDecorationTheme: InputDecorationTheme(
-    isDense: true,
-    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-  ),
-  cardTheme: CardThemeData(
-    margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-    clipBehavior: Clip.antiAlias,
-    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-  ),
-);
+    appBarTheme: const AppBarTheme(
+      centerTitle: false,
+      scrolledUnderElevation: 0,
+      toolbarHeight: 48,
+    ),
+    floatingActionButtonTheme: const FloatingActionButtonThemeData(
+      smallSizeConstraints: BoxConstraints(minWidth: 40, minHeight: 40),
+    ),
+    inputDecorationTheme: InputDecorationTheme(
+      isDense: true,
+      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+    ),
+    cardTheme: CardThemeData(
+      margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      clipBehavior: Clip.antiAlias,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+    ),
+  );
+}
 
-ThemeData get appThemeDark => ThemeData(
-  useMaterial3: true,
-  visualDensity: VisualDensity.compact,
-  colorScheme: ColorScheme.fromSeed(
-    seedColor: Colors.deepPurple,
-    brightness: Brightness.dark,
-  ),
-  textTheme: _compactTextTheme(
-    ColorScheme.fromSeed(
-      seedColor: Colors.deepPurple,
-      brightness: Brightness.dark,
-    ),
-  ),
-  listTileTheme: ListTileThemeData(
-    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 0),
-    minLeadingWidth: 40,
-    dense: true,
-  ),
-  appBarTheme: const AppBarTheme(
-    centerTitle: false,
-    scrolledUnderElevation: 0,
-    toolbarHeight: 48,
-  ),
-  floatingActionButtonTheme: const FloatingActionButtonThemeData(
-    smallSizeConstraints: BoxConstraints(minWidth: 40, minHeight: 40),
-  ),
-  inputDecorationTheme: InputDecorationTheme(
-    isDense: true,
-    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-  ),
-  cardTheme: CardThemeData(
-    margin: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-    clipBehavior: Clip.antiAlias,
-    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-  ),
-);
+ThemeData appTheme([Color? accentColor]) =>
+    _buildTheme(accentColor ?? _defaultSeed, Brightness.light);
+
+ThemeData appThemeDark([Color? accentColor]) =>
+    _buildTheme(accentColor ?? _defaultSeed, Brightness.dark);

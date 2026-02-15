@@ -240,7 +240,8 @@ class _ListsScreenState extends State<ListsScreen> with WidgetsBindingObserver {
       drawer: _buildDrawer(context),
       body: _buildTaskList(),
       // Show FAB for virtual views (tasks go to Inbox) and when a list is selected.
-      floatingActionButton: _selectedVirtualKey != _virtualTrash &&
+      floatingActionButton:
+          _selectedVirtualKey != _virtualTrash &&
               (_selectedVirtualKey != null || _effectiveListId != null)
           ? FloatingActionButton(
               onPressed: _showAddTaskSheet,
@@ -263,6 +264,57 @@ class _ListsScreenState extends State<ListsScreen> with WidgetsBindingObserver {
         itemCount: tasks.length,
         itemBuilder: (context, index) {
           final task = tasks[index];
+          final primary = Theme.of(context).colorScheme.primary;
+          final subtitleChildren = <Widget>[
+            if (task.notes != null && task.notes!.trim().isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 3),
+                child: Text(
+                  task.notes!.trim().split(RegExp(r'[\r\n]+')).first,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    fontSize: 13,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            if (task.dueDate != null || task.reminder != null)
+              Wrap(
+                spacing: 12,
+                runSpacing: 2,
+                children: [
+                  if (task.dueDate != null)
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.calendar_today, size: 14, color: primary),
+                        const SizedBox(width: 4),
+                        Text(
+                          _formatDueDate(task.dueDate!),
+                          style: Theme.of(
+                            context,
+                          ).textTheme.bodySmall?.copyWith(color: primary),
+                        ),
+                      ],
+                    ),
+                  if (task.reminder != null)
+                    Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.notifications, size: 14, color: primary),
+                        const SizedBox(width: 4),
+                        Text(
+                          _formatDueDate(task.reminder!),
+                          style: Theme.of(
+                            context,
+                          ).textTheme.bodySmall?.copyWith(color: primary),
+                        ),
+                      ],
+                    ),
+                ],
+              ),
+          ];
           final tile = ListTile(
             contentPadding: const EdgeInsets.symmetric(horizontal: 4),
             dense: true,
@@ -276,14 +328,19 @@ class _ListsScreenState extends State<ListsScreen> with WidgetsBindingObserver {
               task.title,
               style: TextStyle(
                 fontSize: 16,
+                height: 1.4,
                 decoration: task.completedAt != null
                     ? TextDecoration.lineThrough
                     : null,
               ),
             ),
-            subtitle: task.dueDate != null
-                ? Text(_formatDueDate(task.dueDate!))
-                : null,
+            subtitle: subtitleChildren.isEmpty
+                ? null
+                : Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: subtitleChildren,
+                  ),
             onTap: () => _showEditTaskSheet(task),
             onLongPress: () => _showTaskOptions(context, task),
           );
@@ -295,21 +352,35 @@ class _ListsScreenState extends State<ListsScreen> with WidgetsBindingObserver {
             key: ValueKey(task.id),
             direction: DismissDirection.horizontal,
             confirmDismiss: (direction) async {
-              final action = direction == DismissDirection.endToStart ? leftAction : rightAction;
+              final action = direction == DismissDirection.endToStart
+                  ? leftAction
+                  : rightAction;
               if (action == SwipeAction.edit) {
                 _showEditTaskSheet(task);
                 return false;
               }
               if (action == SwipeAction.trash) {
-                RepositoryScope.of(context).notificationService.cancelReminder(task.id);
+                RepositoryScope.of(
+                  context,
+                ).notificationService.cancelReminder(task.id);
                 _taskRepository.softDelete(task.id);
               } else {
                 _taskRepository.completeTask(task.id);
               }
               return true;
             },
-            background: _swipeBackground(context, rightAction, Alignment.centerLeft, EdgeInsets.only(left: 16)),
-            secondaryBackground: _swipeBackground(context, leftAction, Alignment.centerRight, EdgeInsets.only(right: 16)),
+            background: _swipeBackground(
+              context,
+              rightAction,
+              Alignment.centerLeft,
+              EdgeInsets.only(left: 16),
+            ),
+            secondaryBackground: _swipeBackground(
+              context,
+              leftAction,
+              Alignment.centerRight,
+              EdgeInsets.only(right: 16),
+            ),
             child: tile,
           );
         },
@@ -403,266 +474,53 @@ class _ListsScreenState extends State<ListsScreen> with WidgetsBindingObserver {
     if (_scaffoldKey.currentState?.isDrawerOpen ?? false) {
       Navigator.of(context).pop();
     }
-    final titleController = TextEditingController();
-    final notesController = TextEditingController();
-    DateTime? dueDate;
-    DateTime? reminder;
-    Future<Null> pickDueDate(
-      BuildContext ctx,
-      void Function(void Function()) setSheetState,
-    ) async {
-      final now = DateTime.now();
-      final picked = await showDatePicker(
-        context: context,
-        initialDate: dueDate ?? now,
-        firstDate: DateTime(2000),
-        lastDate: DateTime(2100),
-      );
-      if (picked == null) return;
-      if (!mounted) return;
-      final time = await showTimePicker(
-        context: context,
-        initialTime: dueDate != null
-            ? TimeOfDay.fromDateTime(dueDate!)
-            : TimeOfDay.fromDateTime(now),
-      );
-      if (time != null && mounted) {
-        setSheetState(
-          () => dueDate = DateTime(
-            picked.year,
-            picked.month,
-            picked.day,
-            time.hour,
-            time.minute,
-          ),
-        );
-      }
-    }
-
-    Future<Null> pickReminder(
-      BuildContext ctx,
-      void Function(void Function()) setSheetState,
-    ) async {
-      final now = DateTime.now();
-      final date = await showDatePicker(
-        context: context,
-        initialDate: reminder ?? now,
-        firstDate: DateTime(2000),
-        lastDate: DateTime(2100),
-      );
-      if (date == null) return;
-      if (!mounted) return;
-      final time = await showTimePicker(
-        context: context,
-        initialTime: reminder != null
-            ? TimeOfDay.fromDateTime(reminder!)
-            : TimeOfDay.fromDateTime(now),
-      );
-      if (time != null && mounted) {
-        setSheetState(
-          () => reminder = DateTime(
-            date.year,
-            date.month,
-            date.day,
-            time.hour,
-            time.minute,
-          ),
-        );
-      }
-    }
-
     showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (ctx) => Padding(
-        padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
-        child: StatefulBuilder(
-          builder: (ctx, setSheetState) => Container(
-            decoration: BoxDecoration(
-              color: Theme.of(ctx).colorScheme.surface,
-              borderRadius: const BorderRadius.vertical(
-                top: Radius.circular(12),
-              ),
-            ),
-            padding: EdgeInsets.fromLTRB(
-              20,
-              16,
-              20,
-              16 + MediaQuery.of(ctx).padding.bottom,
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                TextField(
-                  controller: titleController,
-                  autofocus: true,
-                  decoration: const InputDecoration(
-                    hintText: 'What would you like to do?',
-                    border: InputBorder.none,
-                    contentPadding: EdgeInsets.zero,
-                    isDense: true,
-                    hintStyle: TextStyle(fontSize: 14),
-                  ),
-                  textInputAction: TextInputAction.next,
-                  onSubmitted: (_) => _addTask(
-                    ctx,
-                    listId,
-                    titleController.text,
-                    notesController.text.trim().isEmpty
-                        ? null
-                        : notesController.text.trim(),
-                    dueDate,
-                    reminder,
-                  ),
-                ),
-                TextField(
-                  controller: notesController,
-                  decoration: const InputDecoration(
-                    hintText: 'Description',
-                    border: InputBorder.none,
-                    contentPadding: EdgeInsets.zero,
-                    isDense: true,
-                    hintStyle: TextStyle(fontSize: 13, color: Colors.grey),
-                  ),
-                  maxLines: 2,
-                  minLines: 1,
-                  textInputAction: TextInputAction.done,
-                  onSubmitted: (_) => _addTask(
-                    ctx,
-                    listId,
-                    titleController.text,
-                    notesController.text.trim().isEmpty
-                        ? null
-                        : notesController.text.trim(),
-                    dueDate,
-                    reminder,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    InkWell(
-                      borderRadius: BorderRadius.circular(20),
-                      onTap: () => pickDueDate(ctx, setSheetState),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 4,
-                          vertical: 8,
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              dueDate != null
-                                  ? Icons.calendar_today
-                                  : Icons.calendar_today_outlined,
-                              size: 22,
-                              color: dueDate != null
-                                  ? Theme.of(ctx).colorScheme.primary
-                                  : Theme.of(ctx).colorScheme.onSurfaceVariant,
-                            ),
-                            if (dueDate != null) ...[
-                              const SizedBox(width: 6),
-                              Text(
-                                _formatDueDate(dueDate!),
-                                style: Theme.of(ctx).textTheme.bodySmall
-                                    ?.copyWith(
-                                      color: Theme.of(ctx).colorScheme.primary,
-                                    ),
-                              ),
-                            ],
-                          ],
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 4),
-                    InkWell(
-                      borderRadius: BorderRadius.circular(20),
-                      onTap: () => pickReminder(ctx, setSheetState),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 4,
-                          vertical: 8,
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              reminder != null
-                                  ? Icons.notifications
-                                  : Icons.notifications_outlined,
-                              size: 22,
-                              color: reminder != null
-                                  ? Theme.of(ctx).colorScheme.primary
-                                  : Theme.of(ctx).colorScheme.onSurfaceVariant,
-                            ),
-                            if (reminder != null) ...[
-                              const SizedBox(width: 6),
-                              Text(
-                                _formatDueDate(reminder!),
-                                style: Theme.of(ctx).textTheme.bodySmall
-                                    ?.copyWith(
-                                      color: Theme.of(ctx).colorScheme.primary,
-                                    ),
-                              ),
-                            ],
-                          ],
-                        ),
-                      ),
-                    ),
-                    const Spacer(),
-                    IconButton.filled(
-                      style: IconButton.styleFrom(
-                        backgroundColor: Theme.of(ctx).colorScheme.primary,
-                      ),
-                      icon: const Icon(Icons.check, color: Colors.white),
-                      tooltip: 'Add task',
-                      onPressed: () => _addTask(
-                        ctx,
-                        listId,
-                        titleController.text,
-                        notesController.text.trim().isEmpty
-                            ? null
-                            : notesController.text.trim(),
-                        dueDate,
-                        reminder,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
+      builder: (ctx) => _AddTaskSheetContent(
+        listId: listId,
+        taskRepo: _taskRepository,
+        notificationService: RepositoryScope.of(context).notificationService,
+        formatDueDate: _formatDueDate,
+        onSave: (title, notes, dueDate, reminder, subtaskTitles) => _addTask(
+          ctx,
+          listId,
+          title,
+          notes,
+          dueDate,
+          reminder,
+          subtaskTitles,
         ),
       ),
     );
   }
 
-  void _addTask(
+  Future<void> _addTask(
     BuildContext ctx,
     int listId,
     String title,
     String? notes,
     DateTime? dueDate,
     DateTime? reminder,
-  ) {
+    List<String> subtaskTitles,
+  ) async {
     if (title.trim().isEmpty) return;
     final notificationService = RepositoryScope.of(ctx).notificationService;
-    _taskRepository
-        .insertTask(
-          listId,
-          title.trim(),
-          notes: notes,
-          dueDate: dueDate,
-          reminder: reminder,
-        )
-        .then((id) {
-          if (reminder != null) {
-            notificationService.scheduleReminder(id, title.trim(), reminder);
-          }
-        });
+    final id = await _taskRepository.insertTask(
+      listId,
+      title.trim(),
+      notes: notes,
+      dueDate: dueDate,
+      reminder: reminder,
+    );
+    for (final t in subtaskTitles) {
+      if (t.trim().isEmpty) continue;
+      await _taskRepository.insertTask(listId, t.trim(), parentId: id);
+    }
+    if (reminder != null) {
+      notificationService.scheduleReminder(id, title.trim(), reminder);
+    }
     if (ctx.mounted) Navigator.pop(ctx);
   }
 
@@ -897,9 +755,7 @@ class _ListsScreenState extends State<ListsScreen> with WidgetsBindingObserver {
         child: Container(
           decoration: BoxDecoration(
             color: Theme.of(ctx).colorScheme.surface,
-            borderRadius: const BorderRadius.vertical(
-              top: Radius.circular(12),
-            ),
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
           ),
           padding: EdgeInsets.fromLTRB(
             20,
@@ -1056,6 +912,299 @@ class _ListsScreenState extends State<ListsScreen> with WidgetsBindingObserver {
             child: const Text('Delete'),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _AddTaskSheetContent extends StatefulWidget {
+  const _AddTaskSheetContent({
+    required this.listId,
+    required this.taskRepo,
+    required this.notificationService,
+    required this.formatDueDate,
+    required this.onSave,
+  });
+
+  final int listId;
+  final TaskRepository taskRepo;
+  final NotificationService notificationService;
+  final String Function(DateTime) formatDueDate;
+  final Future<void> Function(
+    String title,
+    String? notes,
+    DateTime? dueDate,
+    DateTime? reminder,
+    List<String> subtaskTitles,
+  )
+  onSave;
+
+  @override
+  State<_AddTaskSheetContent> createState() => _AddTaskSheetContentState();
+}
+
+class _AddTaskSheetContentState extends State<_AddTaskSheetContent> {
+  final _titleController = TextEditingController();
+  final _notesController = TextEditingController();
+  final _subtaskController = TextEditingController();
+  DateTime? _dueDate;
+  DateTime? _reminder;
+  final List<String> _subtaskTitles = [];
+
+  @override
+  void dispose() {
+    _titleController.dispose();
+    _notesController.dispose();
+    _subtaskController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _pickDueDate() async {
+    final now = DateTime.now();
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _dueDate ?? now,
+      firstDate: DateTime(2000),
+      lastDate: DateTime(2100),
+    );
+    if (picked == null) return;
+    if (!mounted) return;
+    final time = await showTimePicker(
+      context: context,
+      initialTime: _dueDate != null
+          ? TimeOfDay.fromDateTime(_dueDate!)
+          : TimeOfDay.fromDateTime(now),
+    );
+    if (time != null && mounted) {
+      setState(
+        () => _dueDate = DateTime(
+          picked.year,
+          picked.month,
+          picked.day,
+          time.hour,
+          time.minute,
+        ),
+      );
+    }
+  }
+
+  Future<void> _pickReminder() async {
+    final now = DateTime.now();
+    final date = await showDatePicker(
+      context: context,
+      initialDate: _reminder ?? now,
+      firstDate: DateTime(2000),
+      lastDate: DateTime(2100),
+    );
+    if (date == null) return;
+    if (!mounted) return;
+    final time = await showTimePicker(
+      context: context,
+      initialTime: _reminder != null
+          ? TimeOfDay.fromDateTime(_reminder!)
+          : TimeOfDay.fromDateTime(now),
+    );
+    if (time != null && mounted) {
+      setState(
+        () => _reminder = DateTime(
+          date.year,
+          date.month,
+          date.day,
+          time.hour,
+          time.minute,
+        ),
+      );
+    }
+  }
+
+  void _addSubtask() {
+    final t = _subtaskController.text.trim();
+    if (t.isEmpty) return;
+    setState(() => _subtaskTitles.add(t));
+    _subtaskController.clear();
+  }
+
+  Future<void> _submit() => widget.onSave(
+    _titleController.text,
+    _notesController.text.trim().isEmpty ? null : _notesController.text.trim(),
+    _dueDate,
+    _reminder,
+    List.from(_subtaskTitles),
+  );
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final primary = theme.colorScheme.primary;
+    return Padding(
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).viewInsets.bottom,
+      ),
+      child: Container(
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surface,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+        ),
+        padding: EdgeInsets.fromLTRB(
+          20,
+          16,
+          20,
+          16 + MediaQuery.of(context).padding.bottom,
+        ),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              TextField(
+                controller: _titleController,
+                autofocus: true,
+                decoration: const InputDecoration(
+                  hintText: 'What would you like to do?',
+                  border: InputBorder.none,
+                  contentPadding: EdgeInsets.zero,
+                  isDense: true,
+                  hintStyle: TextStyle(fontSize: 16),
+                ),
+                style: TextStyle(fontSize: 16),
+                textInputAction: TextInputAction.next,
+                onSubmitted: (_) => _submit(),
+              ),
+              TextField(
+                controller: _notesController,
+                decoration: const InputDecoration(
+                  hintText: 'Description',
+                  border: InputBorder.none,
+                  contentPadding: EdgeInsets.zero,
+                  isDense: true,
+                  hintStyle: TextStyle(fontSize: 14, color: Colors.grey),
+                ),
+                maxLines: 2,
+                minLines: 1,
+                textInputAction: TextInputAction.done,
+                style: TextStyle(fontSize: 14),
+                onSubmitted: (_) => _submit(),
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  InkWell(
+                    borderRadius: BorderRadius.circular(20),
+                    onTap: _pickDueDate,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 4,
+                        vertical: 8,
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            _dueDate != null
+                                ? Icons.calendar_today
+                                : Icons.calendar_today_outlined,
+                            size: 22,
+                            color: _dueDate != null
+                                ? primary
+                                : theme.colorScheme.onSurfaceVariant,
+                          ),
+                          if (_dueDate != null) ...[
+                            const SizedBox(width: 6),
+                            Text(
+                              widget.formatDueDate(_dueDate!),
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: primary,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  InkWell(
+                    borderRadius: BorderRadius.circular(20),
+                    onTap: _pickReminder,
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 4,
+                        vertical: 8,
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            _reminder != null
+                                ? Icons.notifications
+                                : Icons.notifications_outlined,
+                            size: 22,
+                            color: _reminder != null
+                                ? primary
+                                : theme.colorScheme.onSurfaceVariant,
+                          ),
+                          if (_reminder != null) ...[
+                            const SizedBox(width: 6),
+                            Text(
+                              widget.formatDueDate(_reminder!),
+                              style: theme.textTheme.bodySmall?.copyWith(
+                                color: primary,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ),
+                  const Spacer(),
+                  IconButton.filled(
+                    style: IconButton.styleFrom(backgroundColor: primary),
+                    icon: const Icon(
+                      Icons.check,
+                      color: Colors.white,
+                      size: 22,
+                    ),
+                    tooltip: 'Add task',
+                    onPressed: () => _submit(),
+                  ),
+                ],
+              ),
+              const Divider(height: 24),
+              Text('Subtasks', style: theme.textTheme.titleSmall),
+              const SizedBox(height: 4),
+              ..._subtaskTitles.asMap().entries.map(
+                (e) => ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(e.value),
+                  trailing: IconButton(
+                    icon: const Icon(Icons.close, size: 20),
+                    onPressed: () =>
+                        setState(() => _subtaskTitles.removeAt(e.key)),
+                  ),
+                ),
+              ),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: _subtaskController,
+                      decoration: const InputDecoration(
+                        hintText: 'Add subtask',
+                        border: InputBorder.none,
+                        contentPadding: EdgeInsets.zero,
+                        isDense: true,
+                      ),
+                      onSubmitted: (_) => _addSubtask(),
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.add),
+                    onPressed: _addSubtask,
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -1222,9 +1371,10 @@ class _TaskEditSheetContentState extends State<_TaskEditSheetContent> {
                   border: InputBorder.none,
                   contentPadding: EdgeInsets.zero,
                   isDense: true,
-                  hintStyle: TextStyle(fontSize: 14),
+                  hintStyle: TextStyle(fontSize: 16),
                 ),
                 textInputAction: TextInputAction.next,
+                style: TextStyle(fontSize: 16),
               ),
               TextField(
                 controller: _notesController,
@@ -1233,11 +1383,12 @@ class _TaskEditSheetContentState extends State<_TaskEditSheetContent> {
                   border: InputBorder.none,
                   contentPadding: EdgeInsets.zero,
                   isDense: true,
-                  hintStyle: TextStyle(fontSize: 13, color: Colors.grey),
+                  hintStyle: TextStyle(fontSize: 14, color: Colors.grey),
                 ),
                 maxLines: 2,
                 minLines: 1,
                 textInputAction: TextInputAction.done,
+                style: TextStyle(fontSize: 14),
               ),
               const SizedBox(height: 8),
               Row(
@@ -1310,15 +1461,15 @@ class _TaskEditSheetContentState extends State<_TaskEditSheetContent> {
                     ),
                   ),
                   const Spacer(),
-                  TextButton(
-                    onPressed: () => Navigator.pop(context),
-                    child: const Text('Cancel'),
-                  ),
                   IconButton.filled(
                     style: IconButton.styleFrom(
                       backgroundColor: theme.colorScheme.primary,
                     ),
-                    icon: const Icon(Icons.check, color: Colors.white),
+                    icon: const Icon(
+                      Icons.check,
+                      color: Colors.white,
+                      size: 22,
+                    ),
                     tooltip: 'Save',
                     onPressed: _saveTask,
                   ),

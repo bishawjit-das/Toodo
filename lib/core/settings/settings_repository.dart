@@ -5,6 +5,22 @@ const _keyThemeMode = 'theme_mode';
 const _keyDefaultListId = 'default_list_id';
 const _keyLeftSwipeAction = 'left_swipe_action';
 const _keyRightSwipeAction = 'right_swipe_action';
+const _keyAccentColor = 'accent_color';
+
+/// Default accent (deepPurple).
+const Color _defaultAccent = Color(0xFF6750A4);
+
+/// Predefined accent color options.
+const List<Color> predefinedAccentColors = [
+  Color(0xFF6750A4), // deepPurple
+  Color(0xFF1976D2), // blue
+  Color(0xFF2E7D32), // green
+  Color(0xFFF57C00), // orange
+  Color(0xFFC62828), // red
+  Color(0xFF00897B), // teal
+  Color(0xFF7B1FA2), // purple
+  Color(0xFF1565C0), // indigo
+];
 
 /// Swipe action: Trash (soft delete), Done (complete), Edit (open edit sheet).
 enum SwipeAction {
@@ -67,5 +83,14 @@ class SettingsRepository {
 
   Future<void> setRightSwipeAction(SwipeAction action) async {
     await _prefs.setString(_keyRightSwipeAction, action.value);
+  }
+
+  Color get accentColor {
+    final v = _prefs.getInt(_keyAccentColor);
+    return v != null ? Color(v) : _defaultAccent;
+  }
+
+  Future<void> setAccentColor(Color color) async {
+    await _prefs.setInt(_keyAccentColor, color.value);
   }
 }

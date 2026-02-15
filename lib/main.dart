@@ -21,33 +21,46 @@ void main() async {
   await notificationService.handleLaunchFromNotification();
   final settingsRepo = SettingsRepository(prefs);
   final themeModeNotifier = ValueNotifier<ThemeMode>(settingsRepo.themeMode);
+  final accentColorNotifier = ValueNotifier<Color>(settingsRepo.accentColor);
   runApp(RepositoryScope(
     listRepository: listRepo,
     taskRepository: taskRepo,
     notificationService: notificationService,
     settingsRepository: settingsRepo,
     themeModeNotifier: themeModeNotifier,
-    child: MainApp(themeModeNotifier: themeModeNotifier),
+    accentColorNotifier: accentColorNotifier,
+    child: MainApp(
+      themeModeNotifier: themeModeNotifier,
+      accentColorNotifier: accentColorNotifier,
+    ),
   ));
 }
 
 class MainApp extends StatelessWidget {
-  const MainApp({super.key, required this.themeModeNotifier});
+  const MainApp({
+    super.key,
+    required this.themeModeNotifier,
+    required this.accentColorNotifier,
+  });
 
   final ValueNotifier<ThemeMode> themeModeNotifier;
+  final ValueNotifier<Color> accentColorNotifier;
 
   @override
   Widget build(BuildContext context) {
-    return ValueListenableBuilder<ThemeMode>(
-      valueListenable: themeModeNotifier,
-      builder: (_, themeMode, _) => MaterialApp.router(
-        title: 'Toodo',
-        theme: appTheme,
-        darkTheme: appThemeDark,
-        themeMode: themeMode,
-        debugShowCheckedModeBanner: false,
-        routerConfig: createAppRouter(),
-      ),
+    return AnimatedBuilder(
+      animation: Listenable.merge([themeModeNotifier, accentColorNotifier]),
+      builder: (_, __) {
+        final accent = accentColorNotifier.value;
+        return MaterialApp.router(
+          title: 'Toodo',
+          theme: appTheme(accent),
+          darkTheme: appThemeDark(accent),
+          themeMode: themeModeNotifier.value,
+          debugShowCheckedModeBanner: false,
+          routerConfig: createAppRouter(),
+        );
+      },
     );
   }
 }
