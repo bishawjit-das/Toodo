@@ -453,6 +453,17 @@ class $TasksTable extends Tasks with TableInfo<$TasksTable, Task> {
     type: DriftSqlType.dateTime,
     requiredDuringInsert: false,
   );
+  static const VerificationMeta _deletedAtMeta = const VerificationMeta(
+    'deletedAt',
+  );
+  @override
+  late final GeneratedColumn<DateTime> deletedAt = GeneratedColumn<DateTime>(
+    'deleted_at',
+    aliasedName,
+    true,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: false,
+  );
   static const VerificationMeta _sortOrderMeta = const VerificationMeta(
     'sortOrder',
   );
@@ -491,6 +502,7 @@ class $TasksTable extends Tasks with TableInfo<$TasksTable, Task> {
     repeat,
     priority,
     completedAt,
+    deletedAt,
     sortOrder,
     parentId,
   ];
@@ -570,6 +582,12 @@ class $TasksTable extends Tasks with TableInfo<$TasksTable, Task> {
         ),
       );
     }
+    if (data.containsKey('deleted_at')) {
+      context.handle(
+        _deletedAtMeta,
+        deletedAt.isAcceptableOrUnknown(data['deleted_at']!, _deletedAtMeta),
+      );
+    }
     if (data.containsKey('sort_order')) {
       context.handle(
         _sortOrderMeta,
@@ -631,6 +649,10 @@ class $TasksTable extends Tasks with TableInfo<$TasksTable, Task> {
         DriftSqlType.dateTime,
         data['${effectivePrefix}completed_at'],
       ),
+      deletedAt: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}deleted_at'],
+      ),
       sortOrder: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}sort_order'],
@@ -659,6 +681,7 @@ class Task extends DataClass implements Insertable<Task> {
   final String? repeat;
   final int priority;
   final DateTime? completedAt;
+  final DateTime? deletedAt;
   final int sortOrder;
   final int? parentId;
   const Task({
@@ -672,6 +695,7 @@ class Task extends DataClass implements Insertable<Task> {
     this.repeat,
     required this.priority,
     this.completedAt,
+    this.deletedAt,
     required this.sortOrder,
     this.parentId,
   });
@@ -699,6 +723,9 @@ class Task extends DataClass implements Insertable<Task> {
     map['priority'] = Variable<int>(priority);
     if (!nullToAbsent || completedAt != null) {
       map['completed_at'] = Variable<DateTime>(completedAt);
+    }
+    if (!nullToAbsent || deletedAt != null) {
+      map['deleted_at'] = Variable<DateTime>(deletedAt);
     }
     map['sort_order'] = Variable<int>(sortOrder);
     if (!nullToAbsent || parentId != null) {
@@ -731,6 +758,9 @@ class Task extends DataClass implements Insertable<Task> {
       completedAt: completedAt == null && nullToAbsent
           ? const Value.absent()
           : Value(completedAt),
+      deletedAt: deletedAt == null && nullToAbsent
+          ? const Value.absent()
+          : Value(deletedAt),
       sortOrder: Value(sortOrder),
       parentId: parentId == null && nullToAbsent
           ? const Value.absent()
@@ -754,6 +784,7 @@ class Task extends DataClass implements Insertable<Task> {
       repeat: serializer.fromJson<String?>(json['repeat']),
       priority: serializer.fromJson<int>(json['priority']),
       completedAt: serializer.fromJson<DateTime?>(json['completedAt']),
+      deletedAt: serializer.fromJson<DateTime?>(json['deletedAt']),
       sortOrder: serializer.fromJson<int>(json['sortOrder']),
       parentId: serializer.fromJson<int?>(json['parentId']),
     );
@@ -772,6 +803,7 @@ class Task extends DataClass implements Insertable<Task> {
       'repeat': serializer.toJson<String?>(repeat),
       'priority': serializer.toJson<int>(priority),
       'completedAt': serializer.toJson<DateTime?>(completedAt),
+      'deletedAt': serializer.toJson<DateTime?>(deletedAt),
       'sortOrder': serializer.toJson<int>(sortOrder),
       'parentId': serializer.toJson<int?>(parentId),
     };
@@ -788,6 +820,7 @@ class Task extends DataClass implements Insertable<Task> {
     Value<String?> repeat = const Value.absent(),
     int? priority,
     Value<DateTime?> completedAt = const Value.absent(),
+    Value<DateTime?> deletedAt = const Value.absent(),
     int? sortOrder,
     Value<int?> parentId = const Value.absent(),
   }) => Task(
@@ -801,6 +834,7 @@ class Task extends DataClass implements Insertable<Task> {
     repeat: repeat.present ? repeat.value : this.repeat,
     priority: priority ?? this.priority,
     completedAt: completedAt.present ? completedAt.value : this.completedAt,
+    deletedAt: deletedAt.present ? deletedAt.value : this.deletedAt,
     sortOrder: sortOrder ?? this.sortOrder,
     parentId: parentId.present ? parentId.value : this.parentId,
   );
@@ -818,6 +852,7 @@ class Task extends DataClass implements Insertable<Task> {
       completedAt: data.completedAt.present
           ? data.completedAt.value
           : this.completedAt,
+      deletedAt: data.deletedAt.present ? data.deletedAt.value : this.deletedAt,
       sortOrder: data.sortOrder.present ? data.sortOrder.value : this.sortOrder,
       parentId: data.parentId.present ? data.parentId.value : this.parentId,
     );
@@ -836,6 +871,7 @@ class Task extends DataClass implements Insertable<Task> {
           ..write('repeat: $repeat, ')
           ..write('priority: $priority, ')
           ..write('completedAt: $completedAt, ')
+          ..write('deletedAt: $deletedAt, ')
           ..write('sortOrder: $sortOrder, ')
           ..write('parentId: $parentId')
           ..write(')'))
@@ -854,6 +890,7 @@ class Task extends DataClass implements Insertable<Task> {
     repeat,
     priority,
     completedAt,
+    deletedAt,
     sortOrder,
     parentId,
   );
@@ -871,6 +908,7 @@ class Task extends DataClass implements Insertable<Task> {
           other.repeat == this.repeat &&
           other.priority == this.priority &&
           other.completedAt == this.completedAt &&
+          other.deletedAt == this.deletedAt &&
           other.sortOrder == this.sortOrder &&
           other.parentId == this.parentId);
 }
@@ -886,6 +924,7 @@ class TasksCompanion extends UpdateCompanion<Task> {
   final Value<String?> repeat;
   final Value<int> priority;
   final Value<DateTime?> completedAt;
+  final Value<DateTime?> deletedAt;
   final Value<int> sortOrder;
   final Value<int?> parentId;
   const TasksCompanion({
@@ -899,6 +938,7 @@ class TasksCompanion extends UpdateCompanion<Task> {
     this.repeat = const Value.absent(),
     this.priority = const Value.absent(),
     this.completedAt = const Value.absent(),
+    this.deletedAt = const Value.absent(),
     this.sortOrder = const Value.absent(),
     this.parentId = const Value.absent(),
   });
@@ -913,6 +953,7 @@ class TasksCompanion extends UpdateCompanion<Task> {
     this.repeat = const Value.absent(),
     this.priority = const Value.absent(),
     this.completedAt = const Value.absent(),
+    this.deletedAt = const Value.absent(),
     this.sortOrder = const Value.absent(),
     this.parentId = const Value.absent(),
   }) : listId = Value(listId),
@@ -928,6 +969,7 @@ class TasksCompanion extends UpdateCompanion<Task> {
     Expression<String>? repeat,
     Expression<int>? priority,
     Expression<DateTime>? completedAt,
+    Expression<DateTime>? deletedAt,
     Expression<int>? sortOrder,
     Expression<int>? parentId,
   }) {
@@ -942,6 +984,7 @@ class TasksCompanion extends UpdateCompanion<Task> {
       if (repeat != null) 'repeat': repeat,
       if (priority != null) 'priority': priority,
       if (completedAt != null) 'completed_at': completedAt,
+      if (deletedAt != null) 'deleted_at': deletedAt,
       if (sortOrder != null) 'sort_order': sortOrder,
       if (parentId != null) 'parent_id': parentId,
     });
@@ -958,6 +1001,7 @@ class TasksCompanion extends UpdateCompanion<Task> {
     Value<String?>? repeat,
     Value<int>? priority,
     Value<DateTime?>? completedAt,
+    Value<DateTime?>? deletedAt,
     Value<int>? sortOrder,
     Value<int?>? parentId,
   }) {
@@ -972,6 +1016,7 @@ class TasksCompanion extends UpdateCompanion<Task> {
       repeat: repeat ?? this.repeat,
       priority: priority ?? this.priority,
       completedAt: completedAt ?? this.completedAt,
+      deletedAt: deletedAt ?? this.deletedAt,
       sortOrder: sortOrder ?? this.sortOrder,
       parentId: parentId ?? this.parentId,
     );
@@ -1010,6 +1055,9 @@ class TasksCompanion extends UpdateCompanion<Task> {
     if (completedAt.present) {
       map['completed_at'] = Variable<DateTime>(completedAt.value);
     }
+    if (deletedAt.present) {
+      map['deleted_at'] = Variable<DateTime>(deletedAt.value);
+    }
     if (sortOrder.present) {
       map['sort_order'] = Variable<int>(sortOrder.value);
     }
@@ -1032,6 +1080,7 @@ class TasksCompanion extends UpdateCompanion<Task> {
           ..write('repeat: $repeat, ')
           ..write('priority: $priority, ')
           ..write('completedAt: $completedAt, ')
+          ..write('deletedAt: $deletedAt, ')
           ..write('sortOrder: $sortOrder, ')
           ..write('parentId: $parentId')
           ..write(')'))
@@ -1349,6 +1398,7 @@ typedef $$TasksTableCreateCompanionBuilder =
       Value<String?> repeat,
       Value<int> priority,
       Value<DateTime?> completedAt,
+      Value<DateTime?> deletedAt,
       Value<int> sortOrder,
       Value<int?> parentId,
     });
@@ -1364,6 +1414,7 @@ typedef $$TasksTableUpdateCompanionBuilder =
       Value<String?> repeat,
       Value<int> priority,
       Value<DateTime?> completedAt,
+      Value<DateTime?> deletedAt,
       Value<int> sortOrder,
       Value<int?> parentId,
     });
@@ -1458,6 +1509,11 @@ class $$TasksTableFilterComposer extends Composer<_$AppDatabase, $TasksTable> {
 
   ColumnFilters<DateTime> get completedAt => $composableBuilder(
     column: $table.completedAt,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get deletedAt => $composableBuilder(
+    column: $table.deletedAt,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -1567,6 +1623,11 @@ class $$TasksTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<DateTime> get deletedAt => $composableBuilder(
+    column: $table.deletedAt,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<int> get sortOrder => $composableBuilder(
     column: $table.sortOrder,
     builder: (column) => ColumnOrderings(column),
@@ -1657,6 +1718,9 @@ class $$TasksTableAnnotationComposer
     builder: (column) => column,
   );
 
+  GeneratedColumn<DateTime> get deletedAt =>
+      $composableBuilder(column: $table.deletedAt, builder: (column) => column);
+
   GeneratedColumn<int> get sortOrder =>
       $composableBuilder(column: $table.sortOrder, builder: (column) => column);
 
@@ -1745,6 +1809,7 @@ class $$TasksTableTableManager
                 Value<String?> repeat = const Value.absent(),
                 Value<int> priority = const Value.absent(),
                 Value<DateTime?> completedAt = const Value.absent(),
+                Value<DateTime?> deletedAt = const Value.absent(),
                 Value<int> sortOrder = const Value.absent(),
                 Value<int?> parentId = const Value.absent(),
               }) => TasksCompanion(
@@ -1758,6 +1823,7 @@ class $$TasksTableTableManager
                 repeat: repeat,
                 priority: priority,
                 completedAt: completedAt,
+                deletedAt: deletedAt,
                 sortOrder: sortOrder,
                 parentId: parentId,
               ),
@@ -1773,6 +1839,7 @@ class $$TasksTableTableManager
                 Value<String?> repeat = const Value.absent(),
                 Value<int> priority = const Value.absent(),
                 Value<DateTime?> completedAt = const Value.absent(),
+                Value<DateTime?> deletedAt = const Value.absent(),
                 Value<int> sortOrder = const Value.absent(),
                 Value<int?> parentId = const Value.absent(),
               }) => TasksCompanion.insert(
@@ -1786,6 +1853,7 @@ class $$TasksTableTableManager
                 repeat: repeat,
                 priority: priority,
                 completedAt: completedAt,
+                deletedAt: deletedAt,
                 sortOrder: sortOrder,
                 parentId: parentId,
               ),

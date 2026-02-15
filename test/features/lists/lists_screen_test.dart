@@ -58,7 +58,7 @@ void main() {
       await tester.tap(find.text('Add list'));
       await tester.pumpAndSettle();
       await tester.enterText(find.byType(TextField), 'New List');
-      await tester.tap(find.text('Add'));
+      await tester.tap(find.byTooltip('Add list'));
       await tester.pumpAndSettle();
 
       final lists = await listRepo.getLists();

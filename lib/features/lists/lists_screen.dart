@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:signals_flutter/signals_flutter.dart';
 import 'package:toodo/core/notifications/notification_service.dart';
 import 'package:toodo/core/scope/repository_scope.dart';
+import 'package:toodo/core/settings/settings_repository.dart';
 import 'package:toodo/data/database/app_database.dart';
 import 'package:toodo/data/repositories/list_repository.dart';
 import 'package:toodo/data/repositories/task_repository.dart';
@@ -108,7 +109,7 @@ class _ListsScreenState extends State<ListsScreen> with WidgetsBindingObserver {
       } else if (key == _virtualCompleted) {
         _tasksSignal.value = data.where((t) => t.completedAt != null).toList();
       } else if (key == _virtualTrash) {
-        _tasksSignal.value = [];
+        _tasksSignal.value = data; // from watchTrashTasks
       } else {
         _tasksSignal.value = data.where((t) {
           if (t.completedAt != null) return false;
@@ -129,7 +130,9 @@ class _ListsScreenState extends State<ListsScreen> with WidgetsBindingObserver {
     _taskSub?.cancel();
     final repo = _taskRepo;
     if (repo == null) return;
-    if (_selectedVirtualKey != null) {
+    if (_selectedVirtualKey == _virtualTrash) {
+      _taskSub = repo.watchTrashTasks().listen(_applyTaskFilter);
+    } else if (_selectedVirtualKey != null) {
       _taskSub = repo.watchAllTasks().listen(_applyTaskFilter);
     } else {
       _taskSub = repo
@@ -143,7 +146,9 @@ class _ListsScreenState extends State<ListsScreen> with WidgetsBindingObserver {
     final repo = _taskRepo;
     if (repo == null) return;
     List<Task> data;
-    if (_selectedVirtualKey != null) {
+    if (_selectedVirtualKey == _virtualTrash) {
+      data = await repo.getTrashTasksFresh();
+    } else if (_selectedVirtualKey != null) {
       data = await repo.getAllTasksFresh();
     } else {
       final listId = _selectedListId;
@@ -235,8 +240,8 @@ class _ListsScreenState extends State<ListsScreen> with WidgetsBindingObserver {
       drawer: _buildDrawer(context),
       body: _buildTaskList(),
       // Show FAB for virtual views (tasks go to Inbox) and when a list is selected.
-      floatingActionButton:
-          (_selectedVirtualKey != null || _effectiveListId != null)
+      floatingActionButton: _selectedVirtualKey != _virtualTrash &&
+              (_selectedVirtualKey != null || _effectiveListId != null)
           ? FloatingActionButton(
               onPressed: _showAddTaskSheet,
               child: const Icon(Icons.add),
@@ -253,18 +258,19 @@ class _ListsScreenState extends State<ListsScreen> with WidgetsBindingObserver {
           child: Text('No tasks', style: TextStyle(fontSize: 16)),
         );
       }
+      final isTrash = _selectedVirtualKey == _virtualTrash;
       return ListView.builder(
         itemCount: tasks.length,
         itemBuilder: (context, index) {
           final task = tasks[index];
-          return ListTile(
+          final tile = ListTile(
             contentPadding: const EdgeInsets.symmetric(horizontal: 4),
             dense: true,
             horizontalTitleGap: 4,
             minLeadingWidth: 32,
             leading: Checkbox(
               value: task.completedAt != null,
-              onChanged: (_) => _toggleTask(task),
+              onChanged: isTrash ? null : (_) => _toggleTask(task),
             ),
             title: Text(
               task.title,
@@ -281,9 +287,69 @@ class _ListsScreenState extends State<ListsScreen> with WidgetsBindingObserver {
             onTap: () => _showEditTaskSheet(task),
             onLongPress: () => _showTaskOptions(context, task),
           );
+          if (isTrash) return tile;
+          final settings = RepositoryScope.of(context).settingsRepository;
+          final leftAction = settings?.leftSwipeAction ?? SwipeAction.trash;
+          final rightAction = settings?.rightSwipeAction ?? SwipeAction.edit;
+          return Dismissible(
+            key: ValueKey(task.id),
+            direction: DismissDirection.horizontal,
+            confirmDismiss: (direction) async {
+              final action = direction == DismissDirection.endToStart ? leftAction : rightAction;
+              if (action == SwipeAction.edit) {
+                _showEditTaskSheet(task);
+                return false;
+              }
+              if (action == SwipeAction.trash) {
+                RepositoryScope.of(context).notificationService.cancelReminder(task.id);
+                _taskRepository.softDelete(task.id);
+              } else {
+                _taskRepository.completeTask(task.id);
+              }
+              return true;
+            },
+            background: _swipeBackground(context, rightAction, Alignment.centerLeft, EdgeInsets.only(left: 16)),
+            secondaryBackground: _swipeBackground(context, leftAction, Alignment.centerRight, EdgeInsets.only(right: 16)),
+            child: tile,
+          );
         },
       );
     });
+  }
+
+  Widget _swipeBackground(
+    BuildContext context,
+    SwipeAction action,
+    Alignment alignment,
+    EdgeInsets padding,
+  ) {
+    final theme = Theme.of(context).colorScheme;
+    final Color bg;
+    final Color fg;
+    final IconData icon;
+    switch (action) {
+      case SwipeAction.trash:
+        bg = theme.errorContainer;
+        fg = theme.onErrorContainer;
+        icon = Icons.delete_outline;
+        break;
+      case SwipeAction.done:
+        bg = theme.primaryContainer;
+        fg = theme.onPrimaryContainer;
+        icon = Icons.check_circle_outline;
+        break;
+      case SwipeAction.edit:
+        bg = theme.tertiaryContainer;
+        fg = theme.onTertiaryContainer;
+        icon = Icons.edit_outlined;
+        break;
+    }
+    return Container(
+      color: bg,
+      alignment: alignment,
+      padding: padding,
+      child: Icon(icon, color: fg),
+    );
   }
 
   String _formatDate(DateTime d) =>

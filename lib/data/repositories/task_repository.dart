@@ -7,17 +7,29 @@ class TaskRepository {
 
   Stream<List<Task>> watchTasksByListId(int listId) {
     return (_db.select(_db.tasks)
-          ..where((t) => t.listId.equals(listId) & t.parentId.isNull())
+          ..where((t) =>
+              t.listId.equals(listId) & t.parentId.isNull() & t.deletedAt.isNull())
           ..orderBy([(t) => OrderingTerm.asc(t.sortOrder), (t) => OrderingTerm.asc(t.id)]))
         .watch();
   }
 
-  /// All top-level tasks across lists (for "All" view). Excludes subtasks.
+  /// All top-level tasks across lists (for "All" view). Excludes subtasks and trashed.
   Stream<List<Task>> watchAllTasks() {
     return (_db.select(_db.tasks)
-          ..where((t) => t.parentId.isNull())
+          ..where((t) => t.parentId.isNull() & t.deletedAt.isNull())
           ..orderBy([
             (t) => OrderingTerm.asc(t.sortOrder),
+            (t) => OrderingTerm.asc(t.id),
+          ]))
+        .watch();
+  }
+
+  /// Trashed tasks (soft-deleted). Top-level only, newest deleted first.
+  Stream<List<Task>> watchTrashTasks() {
+    return (_db.select(_db.tasks)
+          ..where((t) => t.parentId.isNull() & t.deletedAt.isNotNull())
+          ..orderBy([
+            (t) => OrderingTerm.desc(t.deletedAt),
             (t) => OrderingTerm.asc(t.id),
           ]))
         .watch();
@@ -26,7 +38,7 @@ class TaskRepository {
   /// One-shot read of all top-level tasks (e.g. to refresh after background write).
   Future<List<Task>> getAllTasks() {
     return (_db.select(_db.tasks)
-          ..where((t) => t.parentId.isNull())
+          ..where((t) => t.parentId.isNull() & t.deletedAt.isNull())
           ..orderBy([
             (t) => OrderingTerm.asc(t.sortOrder),
             (t) => OrderingTerm.asc(t.id),
@@ -37,10 +49,13 @@ class TaskRepository {
   /// One-shot read of tasks in a list (e.g. to refresh after background write).
   Future<List<Task>> getTasksByListId(int listId) {
     return (_db.select(_db.tasks)
-          ..where((t) => t.listId.equals(listId) & t.parentId.isNull())
+          ..where((t) =>
+              t.listId.equals(listId) & t.parentId.isNull() & t.deletedAt.isNull())
           ..orderBy([(t) => OrderingTerm.asc(t.sortOrder), (t) => OrderingTerm.asc(t.id)]))
         .get();
   }
+
+  Future<List<Task>> getTrashTasksFresh() => AppDatabase.getTrashTasksFresh();
 
   /// One-shot read with a new DB connection so main isolate sees background isolate writes.
   Future<List<Task>> getAllTasksFresh() => AppDatabase.getAllTasksFresh();
@@ -101,6 +116,7 @@ class TaskRepository {
     int? priority,
     int? sortOrder,
     DateTime? completedAt,
+    DateTime? deletedAt,
   }) {
     return (_db.update(_db.tasks)..where((t) => t.id.equals(id))).write(
           TasksCompanion(
@@ -113,9 +129,18 @@ class TaskRepository {
             priority: priority != null ? Value(priority) : const Value.absent(),
             sortOrder: sortOrder != null ? Value(sortOrder) : const Value.absent(),
             completedAt: completedAt != null ? Value(completedAt) : const Value.absent(),
+            deletedAt: deletedAt != null ? Value(deletedAt) : const Value.absent(),
           ),
         );
   }
+
+  /// Move task to trash (soft delete). Cancels reminder if any.
+  Future<void> softDelete(int id) =>
+      updateTask(id, deletedAt: DateTime.now());
+
+  /// Restore task from trash.
+  Future<void> restoreTask(int id) =>
+      updateTask(id, deletedAt: null);
 
   Future<void> deleteTask(int id) {
     return (_db.delete(_db.tasks)..where((t) => t.id.equals(id))).go();

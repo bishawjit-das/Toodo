@@ -27,6 +27,7 @@ class Tasks extends Table {
   TextColumn get repeat => text().nullable()();
   IntColumn get priority => integer().withDefault(const Constant(0))();
   DateTimeColumn get completedAt => dateTime().nullable()();
+  DateTimeColumn get deletedAt => dateTime().nullable()();
   IntColumn get sortOrder => integer().withDefault(const Constant(0))();
   IntColumn get parentId => integer().nullable().references(Tasks, #id)();
 }
@@ -54,7 +55,7 @@ class AppDatabase extends _$AppDatabase {
     final db = AppDatabase(NativeDatabase.createInBackground(file));
     try {
       return await (db.select(db.tasks)
-            ..where((t) => t.parentId.isNull())
+            ..where((t) => t.parentId.isNull() & t.deletedAt.isNull())
             ..orderBy([
               (t) => OrderingTerm.asc(t.sortOrder),
               (t) => OrderingTerm.asc(t.id),
@@ -71,8 +72,25 @@ class AppDatabase extends _$AppDatabase {
     final db = AppDatabase(NativeDatabase.createInBackground(file));
     try {
       return await (db.select(db.tasks)
-            ..where((t) => t.listId.equals(listId) & t.parentId.isNull())
+            ..where((t) => t.listId.equals(listId) & t.parentId.isNull() & t.deletedAt.isNull())
             ..orderBy([(t) => OrderingTerm.asc(t.sortOrder), (t) => OrderingTerm.asc(t.id)]))
+          .get();
+    } finally {
+      await db.close();
+    }
+  }
+
+  /// One-shot read of trashed tasks (deletedAt != null).
+  static Future<List<Task>> getTrashTasksFresh() async {
+    final file = await databaseFile;
+    final db = AppDatabase(NativeDatabase.createInBackground(file));
+    try {
+      return await (db.select(db.tasks)
+            ..where((t) => t.parentId.isNull() & t.deletedAt.isNotNull())
+            ..orderBy([
+              (t) => OrderingTerm.desc(t.deletedAt),
+              (t) => OrderingTerm.asc(t.id),
+            ]))
           .get();
     } finally {
       await db.close();
@@ -90,5 +108,14 @@ class AppDatabase extends _$AppDatabase {
   }
 
   @override
-  int get schemaVersion => 1;
+  int get schemaVersion => 2;
+
+  @override
+  MigrationStrategy get migration => MigrationStrategy(
+        onUpgrade: (migrator, from, to) async {
+          if (from < 2) {
+            await migrator.addColumn(tasks, tasks.deletedAt);
+          }
+        },
+      );
 }

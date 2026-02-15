@@ -3,6 +3,32 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 const _keyThemeMode = 'theme_mode';
 const _keyDefaultListId = 'default_list_id';
+const _keyLeftSwipeAction = 'left_swipe_action';
+const _keyRightSwipeAction = 'right_swipe_action';
+
+/// Swipe action: Trash (soft delete), Done (complete), Edit (open edit sheet).
+enum SwipeAction {
+  trash,
+  done,
+  edit;
+
+  static SwipeAction fromString(String? v) {
+    switch (v) {
+      case 'done':
+        return SwipeAction.done;
+      case 'edit':
+        return SwipeAction.edit;
+      default:
+        return SwipeAction.trash;
+    }
+  }
+
+  String get value => switch (this) {
+        SwipeAction.trash => 'trash',
+        SwipeAction.done => 'done',
+        SwipeAction.edit => 'edit',
+      };
+}
 
 class SettingsRepository {
   SettingsRepository(this._prefs);
@@ -27,5 +53,19 @@ class SettingsRepository {
     } else {
       await _prefs.setInt(_keyDefaultListId, id);
     }
+  }
+
+  SwipeAction get leftSwipeAction =>
+      SwipeAction.fromString(_prefs.getString(_keyLeftSwipeAction));
+
+  Future<void> setLeftSwipeAction(SwipeAction action) async {
+    await _prefs.setString(_keyLeftSwipeAction, action.value);
+  }
+
+  SwipeAction get rightSwipeAction =>
+      SwipeAction.fromString(_prefs.getString(_keyRightSwipeAction));
+
+  Future<void> setRightSwipeAction(SwipeAction action) async {
+    await _prefs.setString(_keyRightSwipeAction, action.value);
   }
 }
