@@ -16,24 +16,27 @@ void main() async {
   final listRepo = ListRepository(db);
   final taskRepo = TaskRepository(db);
   final notificationService = NotificationService();
-  notificationService.onCompleteTask = (taskId) => taskRepo.completeTask(taskId);
+  notificationService.onCompleteTask = (taskId) =>
+      taskRepo.completeTask(taskId);
   await notificationService.init();
   await notificationService.handleLaunchFromNotification();
   final settingsRepo = SettingsRepository(prefs);
   final themeModeNotifier = ValueNotifier<ThemeMode>(settingsRepo.themeMode);
   final accentColorNotifier = ValueNotifier<Color>(settingsRepo.accentColor);
-  runApp(RepositoryScope(
-    listRepository: listRepo,
-    taskRepository: taskRepo,
-    notificationService: notificationService,
-    settingsRepository: settingsRepo,
-    themeModeNotifier: themeModeNotifier,
-    accentColorNotifier: accentColorNotifier,
-    child: MainApp(
+  runApp(
+    RepositoryScope(
+      listRepository: listRepo,
+      taskRepository: taskRepo,
+      notificationService: notificationService,
+      settingsRepository: settingsRepo,
       themeModeNotifier: themeModeNotifier,
       accentColorNotifier: accentColorNotifier,
+      child: MainApp(
+        themeModeNotifier: themeModeNotifier,
+        accentColorNotifier: accentColorNotifier,
+      ),
     ),
-  ));
+  );
 }
 
 class MainApp extends StatelessWidget {
@@ -50,7 +53,7 @@ class MainApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return AnimatedBuilder(
       animation: Listenable.merge([themeModeNotifier, accentColorNotifier]),
-      builder: (_, __) {
+      builder: (_, _) {
         final accent = accentColorNotifier.value;
         return MaterialApp.router(
           title: 'Toodo',

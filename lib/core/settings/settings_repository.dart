@@ -40,10 +40,10 @@ enum SwipeAction {
   }
 
   String get value => switch (this) {
-        SwipeAction.trash => 'trash',
-        SwipeAction.done => 'done',
-        SwipeAction.edit => 'edit',
-      };
+    SwipeAction.trash => 'trash',
+    SwipeAction.done => 'done',
+    SwipeAction.edit => 'edit',
+  };
 }
 
 class SettingsRepository {
@@ -53,7 +53,8 @@ class SettingsRepository {
 
   ThemeMode get themeMode {
     final i = _prefs.getInt(_keyThemeMode);
-    if (i == null || i < 0 || i >= ThemeMode.values.length) return ThemeMode.system;
+    if (i == null || i < 0 || i >= ThemeMode.values.length)
+      return ThemeMode.system;
     return ThemeMode.values[i];
   }
 
@@ -91,6 +92,6 @@ class SettingsRepository {
   }
 
   Future<void> setAccentColor(Color color) async {
-    await _prefs.setInt(_keyAccentColor, color.value);
+    await _prefs.setInt(_keyAccentColor, color.toARGB32());
   }
 }

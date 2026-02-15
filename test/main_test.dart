@@ -14,12 +14,18 @@ void main() {
     final taskRepo = TaskRepository(db);
     final notificationService = NotificationService();
     final themeModeNotifier = ValueNotifier(ThemeMode.system);
-    await tester.pumpWidget(RepositoryScope(
-      listRepository: listRepo,
-      taskRepository: taskRepo,
-      notificationService: notificationService,
-      child: MainApp(themeModeNotifier: themeModeNotifier),
-    ));
+    final accentColorNotifier = ValueNotifier(Colors.blue);
+    await tester.pumpWidget(
+      RepositoryScope(
+        listRepository: listRepo,
+        taskRepository: taskRepo,
+        notificationService: notificationService,
+        child: MainApp(
+          themeModeNotifier: themeModeNotifier,
+          accentColorNotifier: accentColorNotifier,
+        ),
+      ),
+    );
     await tester.pumpAndSettle();
     expect(find.text('All'), findsOneWidget);
   });
