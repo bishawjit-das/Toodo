@@ -43,58 +43,10 @@ class AppDatabase extends _$AppDatabase {
     });
   }
 
-  /// Path to the DB file (for opening a fresh connection to see external writes).
+  /// Path to the DB file (e.g. for background isolate or tests).
   static Future<File> get databaseFile async {
     final dir = await getApplicationDocumentsDirectory();
     return File(p.join(dir.path, 'toodo.db'));
-  }
-
-  /// One-shot read with a new connection so we see writes from another isolate (e.g. notification background).
-  static Future<List<Task>> getAllTasksFresh() async {
-    final file = await databaseFile;
-    final db = AppDatabase(NativeDatabase.createInBackground(file));
-    try {
-      return await (db.select(db.tasks)
-            ..where((t) => t.parentId.isNull() & t.deletedAt.isNull())
-            ..orderBy([
-              (t) => OrderingTerm.asc(t.sortOrder),
-              (t) => OrderingTerm.asc(t.id),
-            ]))
-          .get();
-    } finally {
-      await db.close();
-    }
-  }
-
-  /// One-shot read with a new connection (see getAllTasksFresh).
-  static Future<List<Task>> getTasksByListIdFresh(int listId) async {
-    final file = await databaseFile;
-    final db = AppDatabase(NativeDatabase.createInBackground(file));
-    try {
-      return await (db.select(db.tasks)
-            ..where((t) => t.listId.equals(listId) & t.parentId.isNull() & t.deletedAt.isNull())
-            ..orderBy([(t) => OrderingTerm.asc(t.sortOrder), (t) => OrderingTerm.asc(t.id)]))
-          .get();
-    } finally {
-      await db.close();
-    }
-  }
-
-  /// One-shot read of trashed tasks (deletedAt != null).
-  static Future<List<Task>> getTrashTasksFresh() async {
-    final file = await databaseFile;
-    final db = AppDatabase(NativeDatabase.createInBackground(file));
-    try {
-      return await (db.select(db.tasks)
-            ..where((t) => t.parentId.isNull() & t.deletedAt.isNotNull())
-            ..orderBy([
-              (t) => OrderingTerm.desc(t.deletedAt),
-              (t) => OrderingTerm.asc(t.id),
-            ]))
-          .get();
-    } finally {
-      await db.close();
-    }
   }
 
   /// For tests: in-memory database.

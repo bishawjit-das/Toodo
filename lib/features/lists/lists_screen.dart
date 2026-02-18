@@ -62,6 +62,7 @@ class _ListsScreenState extends State<ListsScreen> with WidgetsBindingObserver {
   /// Name of list just created; used as title until watchLists() emits.
   int? _createdListId;
   String? _createdListName;
+  bool _isDrawerOpen = false;
 
   final _scaffoldKey = GlobalKey<ScaffoldState>();
 
@@ -141,19 +142,19 @@ class _ListsScreenState extends State<ListsScreen> with WidgetsBindingObserver {
     }
   }
 
-  /// On resume: read with a fresh DB connection so we see background isolate writes (WAL visibility), then re-subscribe.
+  /// On resume: one-shot read then re-subscribe so UI sees latest data (e.g. after background complete).
   Future<void> _refreshTasksThenResubscribe() async {
     final repo = _taskRepo;
     if (repo == null) return;
     List<Task> data;
     if (_selectedVirtualKey == _virtualTrash) {
-      data = await repo.getTrashTasksFresh();
+      data = await repo.getTrashTasks();
     } else if (_selectedVirtualKey != null) {
-      data = await repo.getAllTasksFresh();
+      data = await repo.getAllTasks();
     } else {
       final listId = _selectedListId;
       if (listId == null) return;
-      data = await repo.getTasksByListIdFresh(listId);
+      data = await repo.getTasksByListId(listId);
     }
     if (!mounted) return;
     _applyTaskFilter(data);
@@ -217,37 +218,51 @@ class _ListsScreenState extends State<ListsScreen> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      key: _scaffoldKey,
-      appBar: AppBar(
-        titleSpacing: 0,
-        leading: IconButton(
-          key: const Key('drawer_menu'),
-          icon: const Icon(Icons.menu),
-          onPressed: () => _scaffoldKey.currentState?.openDrawer(),
-        ),
-        title: Watch(
-          (context) => Text(_titleFor(), style: TextStyle(fontSize: 18)),
-        ),
-        actions: [
-          IconButton(
-            key: const Key('settings'),
-            icon: const Icon(Icons.settings),
-            onPressed: () => context.go('/settings'),
+    final isDrawerOpen = _scaffoldKey.currentState?.isDrawerOpen ?? _isDrawerOpen;
+    return PopScope(
+      canPop: !isDrawerOpen,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) return;
+        _scaffoldKey.currentState?.closeDrawer();
+        _isDrawerOpen = false;
+        if (mounted) setState(() {});
+      },
+      child: Scaffold(
+        key: _scaffoldKey,
+        appBar: AppBar(
+          titleSpacing: 0,
+          leading: IconButton(
+            key: const Key('drawer_menu'),
+            icon: const Icon(Icons.menu),
+            onPressed: () {
+              _isDrawerOpen = true;
+              _scaffoldKey.currentState?.openDrawer();
+              if (mounted) setState(() {});
+            },
           ),
-        ],
+          title: Watch(
+            (context) => Text(_titleFor(), style: TextStyle(fontSize: 18)),
+          ),
+          actions: [
+            IconButton(
+              key: const Key('settings'),
+              icon: const Icon(Icons.settings),
+              onPressed: () => context.go('/settings'),
+            ),
+          ],
+        ),
+        drawer: _buildDrawer(context),
+        body: _buildTaskList(),
+        // Show FAB for virtual views (tasks go to Inbox) and when a list is selected.
+        floatingActionButton:
+            _selectedVirtualKey != _virtualTrash &&
+                (_selectedVirtualKey != null || _effectiveListId != null)
+            ? FloatingActionButton(
+                onPressed: _showAddTaskSheet,
+                child: const Icon(Icons.add),
+              )
+            : null,
       ),
-      drawer: _buildDrawer(context),
-      body: _buildTaskList(),
-      // Show FAB for virtual views (tasks go to Inbox) and when a list is selected.
-      floatingActionButton:
-          _selectedVirtualKey != _virtualTrash &&
-              (_selectedVirtualKey != null || _effectiveListId != null)
-          ? FloatingActionButton(
-              onPressed: _showAddTaskSheet,
-              child: const Icon(Icons.add),
-            )
-          : null,
     );
   }
 
@@ -622,7 +637,14 @@ class _ListsScreenState extends State<ListsScreen> with WidgetsBindingObserver {
 
     return Drawer(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.zero),
-      child: SafeArea(
+      child: _DrawerCloseNotifier(
+        onClose: () {
+          _isDrawerOpen = false;
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) setState(() {});
+          });
+        },
+        child: SafeArea(
         child: ListView(
           padding: EdgeInsets.zero,
           children: [
@@ -727,6 +749,7 @@ class _ListsScreenState extends State<ListsScreen> with WidgetsBindingObserver {
               onTap: _showAddListDialog,
             ),
           ],
+        ),
         ),
       ),
     );
@@ -916,6 +939,27 @@ class _ListsScreenState extends State<ListsScreen> with WidgetsBindingObserver {
       ),
     );
   }
+}
+
+/// Wraps drawer content; [onClose] is called when the drawer is disposed (e.g. tap outside).
+class _DrawerCloseNotifier extends StatefulWidget {
+  const _DrawerCloseNotifier({required this.onClose, required this.child});
+  final VoidCallback onClose;
+  final Widget child;
+
+  @override
+  State<_DrawerCloseNotifier> createState() => _DrawerCloseNotifierState();
+}
+
+class _DrawerCloseNotifierState extends State<_DrawerCloseNotifier> {
+  @override
+  void dispose() {
+    widget.onClose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => widget.child;
 }
 
 class _AddTaskSheetContent extends StatefulWidget {

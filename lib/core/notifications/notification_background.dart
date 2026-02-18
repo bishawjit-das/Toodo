@@ -1,10 +1,6 @@
-import 'dart:io';
-
 import 'package:drift/native.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:path/path.dart' as p;
 
 import 'package:toodo/data/database/app_database.dart';
 import 'package:toodo/data/repositories/task_repository.dart';
@@ -31,8 +27,7 @@ void notificationTapBackground(NotificationResponse notificationResponse) async 
 Future<void> _completeTaskAndDismiss(int taskId) async {
   try {
     WidgetsFlutterBinding.ensureInitialized();
-    final dir = await getApplicationDocumentsDirectory();
-    final file = File(p.join(dir.path, 'toodo.db'));
+    final file = await AppDatabase.databaseFile;
     final executor = NativeDatabase.createInBackground(file);
     final db = AppDatabase(executor);
     final repo = TaskRepository(db);

@@ -55,13 +55,16 @@ class TaskRepository {
         .get();
   }
 
-  Future<List<Task>> getTrashTasksFresh() => AppDatabase.getTrashTasksFresh();
-
-  /// One-shot read with a new DB connection so main isolate sees background isolate writes.
-  Future<List<Task>> getAllTasksFresh() => AppDatabase.getAllTasksFresh();
-
-  Future<List<Task>> getTasksByListIdFresh(int listId) =>
-      AppDatabase.getTasksByListIdFresh(listId);
+  /// One-shot read of trashed tasks (for refresh after background write).
+  Future<List<Task>> getTrashTasks() {
+    return (_db.select(_db.tasks)
+          ..where((t) => t.parentId.isNull() & t.deletedAt.isNotNull())
+          ..orderBy([
+            (t) => OrderingTerm.desc(t.deletedAt),
+            (t) => OrderingTerm.asc(t.id),
+          ]))
+        .get();
+  }
 
   Stream<List<Task>> watchSubtasksOf(int parentId) {
     return (_db.select(_db.tasks)

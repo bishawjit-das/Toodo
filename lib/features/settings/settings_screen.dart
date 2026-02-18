@@ -68,66 +68,70 @@ class _SettingsScreenState extends State<SettingsScreen> {
         body: const Center(child: Text('Settings not available')),
       );
     }
-    return Scaffold(
-      appBar: AppBar(
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () => context.go('/'),
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (_, _) => context.go('/'),
+      child: Scaffold(
+        appBar: AppBar(
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back),
+            onPressed: () => context.go('/'),
+          ),
+          title: const Text('Settings'),
         ),
-        title: const Text('Settings'),
-      ),
-      body: ListView(
-        children: [
-          ListTile(
-            title: const Text('Theme'),
-            subtitle: Text(_themeMode.name),
-            onTap: () => _showThemePicker(context),
-          ),
-          Watch((context) {
-            final lists = _listsSignal.value;
-            final defaultName = _defaultListId == null
-                ? 'None'
-                : lists
-                          .where((l) => l.id == _defaultListId)
-                          .firstOrNull
-                          ?.name ??
-                      'Unknown';
-            return ListTile(
-              title: const Text('Default list'),
-              subtitle: Text(defaultName),
-              onTap: () => _showDefaultListPicker(context, lists),
-            );
-          }),
-          ListTile(
-            title: const Text('Left swipe'),
-            subtitle: Text(_labelForSwipeAction(_leftSwipeAction)),
-            onTap: () => _showSwipeActionPicker(context, isLeft: true),
-          ),
-          ListTile(
-            title: const Text('Right swipe'),
-            subtitle: Text(_labelForSwipeAction(_rightSwipeAction)),
-            onTap: () => _showSwipeActionPicker(context, isLeft: false),
-          ),
-          ListTile(
-            title: const Text('Accent color'),
-            subtitle: Row(
-              children: [
-                Container(
-                  width: 24,
-                  height: 24,
-                  decoration: BoxDecoration(
-                    color: _accentColor,
-                    shape: BoxShape.circle,
-                    border: Border.all(color: Colors.grey),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                const Text('Tap to change'),
-              ],
+        body: ListView(
+          children: [
+            ListTile(
+              title: const Text('Theme'),
+              subtitle: Text(_themeMode.name),
+              onTap: () => _showThemePicker(context),
             ),
-            onTap: () => _showAccentColorPicker(context),
-          ),
-        ],
+            Watch((context) {
+              final lists = _listsSignal.value;
+              final defaultName = _defaultListId == null
+                  ? 'None'
+                  : lists
+                            .where((l) => l.id == _defaultListId)
+                            .firstOrNull
+                            ?.name ??
+                        'Unknown';
+              return ListTile(
+                title: const Text('Default list'),
+                subtitle: Text(defaultName),
+                onTap: () => _showDefaultListPicker(context, lists),
+              );
+            }),
+            ListTile(
+              title: const Text('Left swipe'),
+              subtitle: Text(_labelForSwipeAction(_leftSwipeAction)),
+              onTap: () => _showSwipeActionPicker(context, isLeft: true),
+            ),
+            ListTile(
+              title: const Text('Right swipe'),
+              subtitle: Text(_labelForSwipeAction(_rightSwipeAction)),
+              onTap: () => _showSwipeActionPicker(context, isLeft: false),
+            ),
+            ListTile(
+              title: const Text('Accent color'),
+              subtitle: Row(
+                children: [
+                  Container(
+                    width: 24,
+                    height: 24,
+                    decoration: BoxDecoration(
+                      color: _accentColor,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.grey),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  const Text('Tap to change'),
+                ],
+              ),
+              onTap: () => _showAccentColorPicker(context),
+            ),
+          ],
+        ),
       ),
     );
   }
