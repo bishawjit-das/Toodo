@@ -23,8 +23,8 @@ class NotificationService {
         'toodo_reminders',
         'Task reminders',
         channelDescription: 'Reminders for tasks',
-        importance: Importance.defaultImportance,
-        priority: Priority.defaultPriority,
+        importance: Importance.high,
+        priority: Priority.high,
         actions: <AndroidNotificationAction>[
           const AndroidNotificationAction(
             _completeActionId,
@@ -45,18 +45,17 @@ class NotificationService {
       } catch (_) {
         tz.setLocalLocation(tz.getLocation('UTC'));
       }
-      const android = AndroidInitializationSettings('@mipmap/ic_launcher');
-      const initSettings = InitializationSettings(android: android);
+      const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
+      const initSettings = InitializationSettings(android: androidSettings);
       await _plugin.initialize(
         initSettings,
         onDidReceiveNotificationResponse: _onNotificationResponse,
         onDidReceiveBackgroundNotificationResponse: notificationTapBackground,
       );
-      await _plugin
-          .resolvePlatformSpecificImplementation<
-            AndroidFlutterLocalNotificationsPlugin
-          >()
-          ?.requestNotificationsPermission();
+      final androidPlugin = _plugin.resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin>();
+      await androidPlugin?.requestNotificationsPermission();
+      await androidPlugin?.requestExactAlarmsPermission();
       _initialized = true;
     } catch (_) {
       // Notifications not available (e.g. in tests or unsupported platform)
@@ -104,7 +103,7 @@ class NotificationService {
         null,
         local,
         NotificationDetails(android: _androidDetails),
-        androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
         uiLocalNotificationDateInterpretation:
             UILocalNotificationDateInterpretation.absoluteTime,
         payload: taskId.toString(),
