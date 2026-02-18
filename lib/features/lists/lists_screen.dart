@@ -1409,27 +1409,50 @@ class _DateTimeReminderSheetContentState
         color: theme.colorScheme.onSurfaceVariant,
       ),
       title: Text('Time', style: theme.textTheme.bodyLarge),
-      trailing: InkWell(
-        onTap: () async {
-          final t = await showTimePicker(
-            context: context,
-            initialTime: _dueTime ?? _nextThirtyMinMark(DateTime.now()),
-          );
-          if (t != null && mounted) setState(() => _dueTime = t);
-        },
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          mainAxisAlignment: MainAxisAlignment.end,
-          children: [
-            Text(
-              _dueTime == null ? 'None' : _formatTime(_dueTime!),
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        mainAxisAlignment: MainAxisAlignment.end,
+        children: [
+          if (_dueTime != null) ...[
+            InkWell(
+              onTap: () => setState(() => _dueTime = null),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    _formatTime(_dueTime!),
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                  const Icon(Icons.close, size: 20),
+                ],
               ),
             ),
-            const Icon(Icons.chevron_right, size: 20),
+          ] else ...[
+            InkWell(
+              onTap: () async {
+                final t = await showTimePicker(
+                  context: context,
+                  initialTime: _dueTime ?? _nextThirtyMinMark(DateTime.now()),
+                );
+                if (t != null && mounted) setState(() => _dueTime = t);
+              },
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'None',
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                  const Icon(Icons.chevron_right, size: 20),
+                ],
+              ),
+            ),
           ],
-        ),
+        ],
       ),
     );
   }
@@ -1783,6 +1806,9 @@ class _TaskEditSheetContentState extends State<_TaskEditSheetContent> {
   DateTime? _dueDate;
   DateTime? _reminder;
   List<Task> _subtasks = [];
+  final Map<int, TextEditingController> _subtaskControllers = {};
+  final Map<int, FocusNode> _subtaskFocusNodes = {};
+  int? _focusedSubtaskId;
   final _subtaskController = TextEditingController();
 
   @override
@@ -1795,15 +1821,69 @@ class _TaskEditSheetContentState extends State<_TaskEditSheetContent> {
 
   Future<void> _loadSubtasks() async {
     final list = await widget.taskRepo.getSubtasks(widget.task.id);
-    if (mounted) setState(() => _subtasks = list);
+    if (!mounted) return;
+    final newIds = list.map((t) => t.id).toSet();
+    for (final t in list) {
+      _subtaskControllers[t.id] ??= TextEditingController(text: t.title);
+      _subtaskFocusNodes[t.id] ??= FocusNode()
+        ..addListener(() {
+          if (!mounted) return;
+          final node = _subtaskFocusNodes[t.id]!;
+          setState(() {
+            if (node.hasFocus) {
+              _focusedSubtaskId = t.id;
+            } else if (_focusedSubtaskId == t.id) {
+              _focusedSubtaskId = null;
+            }
+          });
+        });
+    }
+    for (final id in _subtaskControllers.keys.toList()) {
+      if (!newIds.contains(id)) {
+        _subtaskControllers[id]?.dispose();
+        _subtaskControllers.remove(id);
+      }
+    }
+    for (final id in _subtaskFocusNodes.keys.toList()) {
+      if (!newIds.contains(id)) {
+        _subtaskFocusNodes[id]?.dispose();
+        _subtaskFocusNodes.remove(id);
+        if (_focusedSubtaskId == id) _focusedSubtaskId = null;
+      }
+    }
+    setState(() => _subtasks = list);
   }
 
   @override
   void dispose() {
+    for (final c in _subtaskControllers.values) {
+      c.dispose();
+    }
+    _subtaskControllers.clear();
+    for (final n in _subtaskFocusNodes.values) {
+      n.dispose();
+    }
+    _subtaskFocusNodes.clear();
     _titleController.dispose();
     _notesController.dispose();
     _subtaskController.dispose();
     super.dispose();
+  }
+
+  void _toggleSubtask(Task t) {
+    if (t.completedAt != null) {
+      widget.taskRepo.incompleteTask(t.id);
+    } else {
+      widget.taskRepo.completeTask(t.id);
+    }
+    _loadSubtasks();
+  }
+
+  Future<void> _saveSubtaskTitle(int id, String title) async {
+    final t = title.trim();
+    if (t.isEmpty) return;
+    await widget.taskRepo.updateTask(id, title: t);
+    _loadSubtasks();
   }
 
   Future<void> _pickDateAndReminder() async {
@@ -1943,27 +2023,73 @@ class _TaskEditSheetContentState extends State<_TaskEditSheetContent> {
                     ),
                   ],
                 ),
-                const SizedBox(height: 10),
-                ..._subtasks.map(
-                  (t) => ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    visualDensity: const VisualDensity(
-                      horizontal: -4,
-                      vertical: -4,
+                const SizedBox(height: 8),
+                ..._subtasks.map((t) {
+                  final controller = _subtaskControllers[t.id];
+                  final isCompleted = t.completedAt != null;
+                  if (controller == null) return const SizedBox.shrink();
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 6),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.max,
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        SizedBox(
+                          width: 22,
+                          height: 22,
+                          child: Checkbox(
+                            value: isCompleted,
+                            splashRadius: 0,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(5),
+                            ),
+                            onChanged: (_) => _toggleSubtask(t),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: TextField(
+                            controller: controller,
+                            focusNode: _subtaskFocusNodes[t.id],
+                            style: theme.textTheme.bodyMedium?.copyWith(
+                              fontSize: 13,
+                              color: isCompleted
+                                  ? theme.colorScheme.onSurfaceVariant
+                                  : theme.colorScheme.onSurface,
+                              decoration: isCompleted
+                                  ? TextDecoration.lineThrough
+                                  : null,
+                              decorationColor:
+                                  theme.colorScheme.onSurfaceVariant,
+                            ),
+                            textCapitalization: TextCapitalization.sentences,
+                            decoration: const InputDecoration(
+                              border: InputBorder.none,
+                              contentPadding: EdgeInsets.symmetric(
+                                horizontal: 0,
+                                vertical: 2,
+                              ),
+                              isDense: true,
+                            ),
+                            onSubmitted: (v) => _saveSubtaskTitle(t.id, v),
+                          ),
+                        ),
+                        if (_focusedSubtaskId == t.id)
+                          InkWell(
+                            onTap: () async {
+                              await widget.taskRepo.deleteTask(t.id);
+                              _loadSubtasks();
+                            },
+                            child: Icon(
+                              Icons.close,
+                              size: 20,
+                              color: theme.colorScheme.error,
+                            ),
+                          ),
+                      ],
                     ),
-                    title: Text(
-                      t.title,
-                      style: TextStyle(fontSize: 13, color: Colors.black54),
-                    ),
-                    trailing: InkWell(
-                      onTap: () async {
-                        await widget.taskRepo.deleteTask(t.id);
-                        _loadSubtasks();
-                      },
-                      child: Icon(Icons.close, size: 20),
-                    ),
-                  ),
-                ),
+                  );
+                }),
                 const SizedBox(height: 8),
                 Row(
                   children: [
