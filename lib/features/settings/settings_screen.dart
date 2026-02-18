@@ -44,7 +44,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         appBar: AppBar(
           leading: IconButton(
             icon: const Icon(Icons.arrow_back),
-            onPressed: () => context.go('/'),
+            onPressed: () => context.pop(),
           ),
           title: const Text('Settings'),
         ),
@@ -53,12 +53,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
     return PopScope(
       canPop: false,
-      onPopInvokedWithResult: (_, _) => context.go('/'),
+      onPopInvokedWithResult: (_, _) => context.pop(),
       child: Scaffold(
         appBar: AppBar(
           leading: IconButton(
             icon: const Icon(Icons.arrow_back),
-            onPressed: () => context.go('/'),
+            onPressed: () => context.pop(),
           ),
           title: const Text('Settings'),
         ),

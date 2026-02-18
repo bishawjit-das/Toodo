@@ -254,7 +254,7 @@ class _ListsScreenState extends State<ListsScreen> with WidgetsBindingObserver {
               child: IconButton(
                 key: const Key('settings'),
                 icon: const Icon(Icons.settings),
-                onPressed: () => context.go('/settings'),
+                onPressed: () => context.push('/settings'),
               ),
             ),
           ],
