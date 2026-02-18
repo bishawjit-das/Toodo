@@ -1,11 +1,7 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:signals_flutter/signals_flutter.dart';
 import 'package:toodo/core/scope/repository_scope.dart';
 import 'package:toodo/core/settings/settings_repository.dart';
-import 'package:toodo/data/database/app_database.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -16,12 +12,9 @@ class SettingsScreen extends StatefulWidget {
 
 class _SettingsScreenState extends State<SettingsScreen> {
   late ThemeMode _themeMode;
-  int? _defaultListId;
   late SwipeAction _leftSwipeAction;
   late SwipeAction _rightSwipeAction;
   late Color _accentColor;
-  StreamSubscription<List<ListRow>>? _sub;
-  final _listsSignal = signal<List<ListRow>>([]);
 
   @override
   void didChangeDependencies() {
@@ -30,27 +23,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final settings = scope.settingsRepository;
     if (settings != null) {
       _themeMode = settings.themeMode;
-      _defaultListId = settings.defaultListId;
       _leftSwipeAction = settings.leftSwipeAction;
       _rightSwipeAction = settings.rightSwipeAction;
       _accentColor = settings.accentColor;
     } else {
       _themeMode = ThemeMode.system;
-      _defaultListId = null;
       _leftSwipeAction = SwipeAction.trash;
       _rightSwipeAction = SwipeAction.edit;
       _accentColor = predefinedAccentColors.first;
     }
-    _sub?.cancel();
-    _sub = scope.listRepository.watchLists().listen((data) {
-      _listsSignal.value = data;
-    });
-  }
-
-  @override
-  void dispose() {
-    _sub?.cancel();
-    super.dispose();
   }
 
   @override
@@ -86,21 +67,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
               subtitle: Text(_themeMode.name),
               onTap: () => _showThemePicker(context),
             ),
-            Watch((context) {
-              final lists = _listsSignal.value;
-              final defaultName = _defaultListId == null
-                  ? 'None'
-                  : lists
-                            .where((l) => l.id == _defaultListId)
-                            .firstOrNull
-                            ?.name ??
-                        'Unknown';
-              return ListTile(
-                title: const Text('Default list'),
-                subtitle: Text(defaultName),
-                onTap: () => _showDefaultListPicker(context, lists),
-              );
-            }),
             ListTile(
               title: const Text('Left swipe'),
               subtitle: Text(_labelForSwipeAction(_leftSwipeAction)),
@@ -315,40 +281,5 @@ class _SettingsScreenState extends State<SettingsScreen> {
     RepositoryScope.of(context).accentColorNotifier?.value = color;
     setState(() => _accentColor = color);
     Navigator.pop(dialogContext);
-  }
-
-  void _showDefaultListPicker(BuildContext context, List<ListRow> lists) {
-    showModalBottomSheet<void>(
-      context: context,
-      builder: (ctx) => SafeArea(
-        child: ListView(
-          shrinkWrap: true,
-          children: [
-            ListTile(
-              title: const Text('None'),
-              onTap: () async {
-                await RepositoryScope.of(
-                  context,
-                ).settingsRepository?.setDefaultListId(null);
-                if (ctx.mounted) Navigator.pop(ctx);
-                setState(() => _defaultListId = null);
-              },
-            ),
-            ...lists.map(
-              (l) => ListTile(
-                title: Text(l.name),
-                onTap: () async {
-                  await RepositoryScope.of(
-                    context,
-                  ).settingsRepository?.setDefaultListId(l.id);
-                  if (ctx.mounted) Navigator.pop(ctx);
-                  setState(() => _defaultListId = l.id);
-                },
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
   }
 }
