@@ -53,6 +53,7 @@ class _ListsScreenState extends State<ListsScreen> with WidgetsBindingObserver {
   StreamSubscription<List<ListRow>>? _sub;
   StreamSubscription<List<Task>>? _taskSub;
   bool _ignoreNextTaskEmission = false;
+  bool _tasksLoaded = false;
 
   /// Virtual view: 'all', 'today', 'tomorrow', 'next7'. When null, a list is selected.
   String? _selectedVirtualKey = _virtualAll;
@@ -125,12 +126,14 @@ class _ListsScreenState extends State<ListsScreen> with WidgetsBindingObserver {
     } else {
       _tasksSignal.value = data.where((t) => t.completedAt == null).toList();
     }
+    if (mounted) setState(() => _tasksLoaded = true);
   }
 
   void _subscribeToTasks() {
     _taskSub?.cancel();
     final repo = _taskRepo;
     if (repo == null) return;
+    setState(() => _tasksLoaded = false);
     if (_selectedVirtualKey == _virtualTrash) {
       _taskSub = repo.watchTrashTasks().listen(_applyTaskFilter);
     } else if (_selectedVirtualKey != null) {
@@ -299,8 +302,14 @@ class _ListsScreenState extends State<ListsScreen> with WidgetsBindingObserver {
           'Move ${tasks.length} completed task${tasks.length == 1 ? '' : 's'} to Trash.',
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Trash all')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Trash all'),
+          ),
         ],
       ),
     );
@@ -324,9 +333,14 @@ class _ListsScreenState extends State<ListsScreen> with WidgetsBindingObserver {
           'This cannot be undone. All tasks in Trash will be permanently deleted.',
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
           FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: Theme.of(ctx).colorScheme.error),
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(ctx).colorScheme.error,
+            ),
             onPressed: () => Navigator.pop(ctx, true),
             child: const Text('Delete all'),
           ),
@@ -345,6 +359,15 @@ class _ListsScreenState extends State<ListsScreen> with WidgetsBindingObserver {
   Widget _buildTaskList() {
     return Watch((context) {
       final tasks = _tasksSignal.value;
+      if (!_tasksLoaded) {
+        return const Center(
+          child: SizedBox(
+            width: 15,
+            height: 15,
+            child: CircularProgressIndicator(strokeWidth: 1),
+          ),
+        );
+      }
       if (tasks.isEmpty) {
         return const Center(
           child: Text('No tasks', style: TextStyle(fontSize: 16)),
