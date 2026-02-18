@@ -218,7 +218,8 @@ class _ListsScreenState extends State<ListsScreen> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
-    final isDrawerOpen = _scaffoldKey.currentState?.isDrawerOpen ?? _isDrawerOpen;
+    final isDrawerOpen =
+        _scaffoldKey.currentState?.isDrawerOpen ?? _isDrawerOpen;
     return PopScope(
       canPop: !isDrawerOpen,
       onPopInvokedWithResult: (didPop, _) {
@@ -253,17 +254,92 @@ class _ListsScreenState extends State<ListsScreen> with WidgetsBindingObserver {
         ),
         drawer: _buildDrawer(context),
         body: _buildTaskList(),
-        // Show FAB for virtual views (tasks go to Inbox) and when a list is selected.
-        floatingActionButton:
-            _selectedVirtualKey != _virtualTrash &&
-                (_selectedVirtualKey != null || _effectiveListId != null)
-            ? FloatingActionButton(
-                onPressed: _showAddTaskSheet,
-                child: const Icon(Icons.add),
-              )
-            : null,
+        floatingActionButton: _buildFloatingActionButton(),
       ),
     );
+  }
+
+  Widget? _buildFloatingActionButton() {
+    if (_selectedVirtualKey == _virtualCompleted) {
+      final tasks = _tasksSignal.value;
+      if (tasks.isEmpty) return null;
+      return FloatingActionButton(
+        onPressed: _trashAllCompleted,
+        tooltip: 'Trash all completed',
+        child: const Icon(Icons.delete_sweep),
+      );
+    }
+    if (_selectedVirtualKey == _virtualTrash) {
+      final tasks = _tasksSignal.value;
+      if (tasks.isEmpty) return null;
+      return FloatingActionButton(
+        onPressed: _deleteAllTrash,
+        tooltip: 'Delete all permanently',
+        child: const Icon(Icons.delete_forever),
+      );
+    }
+    if (_selectedVirtualKey != _virtualTrash &&
+        (_selectedVirtualKey != null || _effectiveListId != null)) {
+      return FloatingActionButton(
+        onPressed: _showAddTaskSheet,
+        child: const Icon(Icons.add),
+      );
+    }
+    return null;
+  }
+
+  Future<void> _trashAllCompleted() async {
+    final tasks = _tasksSignal.value;
+    if (tasks.isEmpty) return;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Trash all completed?'),
+        content: Text(
+          'Move ${tasks.length} completed task${tasks.length == 1 ? '' : 's'} to Trash.',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Trash all')),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    final notificationService = RepositoryScope.of(context).notificationService;
+    for (final task in tasks) {
+      notificationService.cancelReminder(task.id);
+      await _taskRepository.softDelete(task.id);
+    }
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _deleteAllTrash() async {
+    final tasks = _tasksSignal.value;
+    if (tasks.isEmpty) return;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete all permanently?'),
+        content: const Text(
+          'This cannot be undone. All tasks in Trash will be permanently deleted.',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Theme.of(ctx).colorScheme.error),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Delete all'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    final notificationService = RepositoryScope.of(context).notificationService;
+    for (final task in tasks) {
+      notificationService.cancelReminder(task.id);
+      await _taskRepository.deleteTask(task.id);
+    }
+    if (mounted) setState(() {});
   }
 
   Widget _buildTaskList() {
@@ -304,7 +380,7 @@ class _ListsScreenState extends State<ListsScreen> with WidgetsBindingObserver {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Icon(Icons.calendar_today, size: 14, color: primary),
-                        const SizedBox(width: 4),
+                        const SizedBox(width: 2),
                         Text(
                           _formatDueDate(task.dueDate!),
                           style: Theme.of(
@@ -318,7 +394,7 @@ class _ListsScreenState extends State<ListsScreen> with WidgetsBindingObserver {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Icon(Icons.notifications, size: 14, color: primary),
-                        const SizedBox(width: 4),
+                        const SizedBox(width: 2),
                         Text(
                           _formatDueDate(task.reminder!),
                           style: Theme.of(
@@ -339,14 +415,17 @@ class _ListsScreenState extends State<ListsScreen> with WidgetsBindingObserver {
               value: task.completedAt != null,
               onChanged: isTrash ? null : (_) => _toggleTask(task),
             ),
-            title: Text(
-              task.title,
-              style: TextStyle(
-                fontSize: 16,
-                height: 1.4,
-                decoration: task.completedAt != null
-                    ? TextDecoration.lineThrough
-                    : null,
+            title: Padding(
+              padding: const EdgeInsets.only(bottom: 5),
+              child: Text(
+                task.title,
+                style: TextStyle(
+                  fontSize: 16,
+                  height: 1.4,
+                  decoration: task.completedAt != null
+                      ? TextDecoration.lineThrough
+                      : null,
+                ),
               ),
             ),
             subtitle: subtitleChildren.isEmpty
@@ -640,116 +719,117 @@ class _ListsScreenState extends State<ListsScreen> with WidgetsBindingObserver {
       child: _DrawerCloseNotifier(
         onClose: () {
           _isDrawerOpen = false;
-          WidgetsBinding.instance.addPostFrameCallback((_) {
+          Future<void>.delayed(Duration.zero, () {
             if (mounted) setState(() {});
           });
         },
         child: SafeArea(
-        child: ListView(
-          padding: EdgeInsets.zero,
-          children: [
-            // Section 1: Inbox, Today, Tomorrow, Next 7 days, All
-            Watch((context) {
-              final inbox = _listsSignal.value
-                  .where((l) => l.name == _inboxName)
-                  .firstOrNull;
-              if (inbox == null) return const SizedBox.shrink();
-              return ListTile(
-                leading: const Icon(Icons.inbox, size: 22),
-                title: const Text('Inbox'),
+          child: ListView(
+            padding: EdgeInsets.zero,
+            children: [
+              // Section 1: Inbox, Today, Tomorrow, Next 7 days, All
+              Watch((context) {
+                final inbox = _listsSignal.value
+                    .where((l) => l.name == _inboxName)
+                    .firstOrNull;
+                if (inbox == null) return const SizedBox.shrink();
+                return ListTile(
+                  leading: const Icon(Icons.inbox, size: 22),
+                  title: const Text('Inbox'),
+                  horizontalTitleGap: _drawerTileGap,
+                  minLeadingWidth: _drawerTileLead,
+                  selected:
+                      _selectedVirtualKey == null &&
+                      _selectedListId == inbox.id,
+                  onTap: () => selectList(inbox.id),
+                  onLongPress: null,
+                );
+              }),
+              ListTile(
+                leading: const Icon(Icons.today, size: 22),
+                title: const Text('Today'),
                 horizontalTitleGap: _drawerTileGap,
                 minLeadingWidth: _drawerTileLead,
-                selected:
-                    _selectedVirtualKey == null && _selectedListId == inbox.id,
-                onTap: () => selectList(inbox.id),
-                onLongPress: null,
-              );
-            }),
-            ListTile(
-              leading: const Icon(Icons.today, size: 22),
-              title: const Text('Today'),
-              horizontalTitleGap: _drawerTileGap,
-              minLeadingWidth: _drawerTileLead,
-              selected: _selectedVirtualKey == _virtualToday,
-              onTap: () => selectVirtual(_virtualToday),
-            ),
-            ListTile(
-              leading: const Icon(Icons.event, size: 22),
-              title: const Text('Tomorrow'),
-              horizontalTitleGap: _drawerTileGap,
-              minLeadingWidth: _drawerTileLead,
-              selected: _selectedVirtualKey == _virtualTomorrow,
-              onTap: () => selectVirtual(_virtualTomorrow),
-            ),
-            ListTile(
-              leading: const Icon(Icons.date_range, size: 22),
-              title: const Text('Next 7 days'),
-              horizontalTitleGap: _drawerTileGap,
-              minLeadingWidth: _drawerTileLead,
-              selected: _selectedVirtualKey == _virtualNext7,
-              onTap: () => selectVirtual(_virtualNext7),
-            ),
-            ListTile(
-              leading: const Icon(Icons.view_list, size: 22),
-              title: const Text('All'),
-              horizontalTitleGap: _drawerTileGap,
-              minLeadingWidth: _drawerTileLead,
-              selected: _selectedVirtualKey == _virtualAll,
-              onTap: () => selectVirtual(_virtualAll),
-            ),
-            const Divider(),
-            // Section 2: Custom lists (divider only when there are custom lists)
-            Watch((context) {
-              final userLists = _listsSignal.value
-                  .where((l) => l.name != _inboxName)
-                  .toList();
-              if (userLists.isEmpty) return const SizedBox.shrink();
-              return Column(
-                children: [
-                  ...userLists.map(
-                    (list) => ListTile(
-                      leading: const Icon(Icons.list_alt, size: 22),
-                      title: Text(list.name),
-                      horizontalTitleGap: _drawerTileGap,
-                      minLeadingWidth: _drawerTileLead,
-                      selected:
-                          _selectedVirtualKey == null &&
-                          _selectedListId == list.id,
-                      onTap: () => selectList(list.id),
-                      onLongPress: () => _showListOptions(context, list),
+                selected: _selectedVirtualKey == _virtualToday,
+                onTap: () => selectVirtual(_virtualToday),
+              ),
+              ListTile(
+                leading: const Icon(Icons.event, size: 22),
+                title: const Text('Tomorrow'),
+                horizontalTitleGap: _drawerTileGap,
+                minLeadingWidth: _drawerTileLead,
+                selected: _selectedVirtualKey == _virtualTomorrow,
+                onTap: () => selectVirtual(_virtualTomorrow),
+              ),
+              ListTile(
+                leading: const Icon(Icons.date_range, size: 22),
+                title: const Text('Next 7 days'),
+                horizontalTitleGap: _drawerTileGap,
+                minLeadingWidth: _drawerTileLead,
+                selected: _selectedVirtualKey == _virtualNext7,
+                onTap: () => selectVirtual(_virtualNext7),
+              ),
+              ListTile(
+                leading: const Icon(Icons.view_list, size: 22),
+                title: const Text('All'),
+                horizontalTitleGap: _drawerTileGap,
+                minLeadingWidth: _drawerTileLead,
+                selected: _selectedVirtualKey == _virtualAll,
+                onTap: () => selectVirtual(_virtualAll),
+              ),
+              const Divider(),
+              // Section 2: Custom lists (divider only when there are custom lists)
+              Watch((context) {
+                final userLists = _listsSignal.value
+                    .where((l) => l.name != _inboxName)
+                    .toList();
+                if (userLists.isEmpty) return const SizedBox.shrink();
+                return Column(
+                  children: [
+                    ...userLists.map(
+                      (list) => ListTile(
+                        leading: const Icon(Icons.list_alt, size: 22),
+                        title: Text(list.name),
+                        horizontalTitleGap: _drawerTileGap,
+                        minLeadingWidth: _drawerTileLead,
+                        selected:
+                            _selectedVirtualKey == null &&
+                            _selectedListId == list.id,
+                        onTap: () => selectList(list.id),
+                        onLongPress: () => _showListOptions(context, list),
+                      ),
                     ),
-                  ),
-                  const Divider(),
-                ],
-              );
-            }),
-            // Section 3: Completed, Trash
-            ListTile(
-              leading: const Icon(Icons.check_circle_outline, size: 22),
-              title: const Text('Completed'),
-              horizontalTitleGap: _drawerTileGap,
-              minLeadingWidth: _drawerTileLead,
-              selected: _selectedVirtualKey == _virtualCompleted,
-              onTap: () => selectVirtual(_virtualCompleted),
-            ),
-            ListTile(
-              leading: const Icon(Icons.delete_outline, size: 22),
-              title: const Text('Trash'),
-              horizontalTitleGap: _drawerTileGap,
-              minLeadingWidth: _drawerTileLead,
-              selected: _selectedVirtualKey == _virtualTrash,
-              onTap: () => selectVirtual(_virtualTrash),
-            ),
-            const Divider(),
-            ListTile(
-              leading: const Icon(Icons.add),
-              title: const Text('Add list'),
-              horizontalTitleGap: 8,
-              minLeadingWidth: 32,
-              onTap: _showAddListDialog,
-            ),
-          ],
-        ),
+                    const Divider(),
+                  ],
+                );
+              }),
+              // Section 3: Completed, Trash
+              ListTile(
+                leading: const Icon(Icons.check_circle_outline, size: 22),
+                title: const Text('Completed'),
+                horizontalTitleGap: _drawerTileGap,
+                minLeadingWidth: _drawerTileLead,
+                selected: _selectedVirtualKey == _virtualCompleted,
+                onTap: () => selectVirtual(_virtualCompleted),
+              ),
+              ListTile(
+                leading: const Icon(Icons.delete_outline, size: 22),
+                title: const Text('Trash'),
+                horizontalTitleGap: _drawerTileGap,
+                minLeadingWidth: _drawerTileLead,
+                selected: _selectedVirtualKey == _virtualTrash,
+                onTap: () => selectVirtual(_virtualTrash),
+              ),
+              const Divider(),
+              ListTile(
+                leading: const Icon(Icons.add),
+                title: const Text('Add list'),
+                horizontalTitleGap: 8,
+                minLeadingWidth: 32,
+                onTap: _showAddListDialog,
+              ),
+            ],
+          ),
         ),
       ),
     );
