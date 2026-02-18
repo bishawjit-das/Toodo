@@ -1064,6 +1064,565 @@ class _DrawerCloseNotifierState extends State<_DrawerCloseNotifier> {
   Widget build(BuildContext context) => widget.child;
 }
 
+typedef _DateReminderResult = (DateTime?, DateTime?);
+
+/// Returns (dueDate, reminder) on confirm, null on cancel. Default due = today, reminder = today 09:00.
+Future<_DateReminderResult?> _showDateTimeReminderSheet(
+  BuildContext context, {
+  DateTime? initialDueDate,
+  DateTime? initialReminder,
+}) async {
+  final now = DateTime.now();
+  final due = initialDueDate ?? now;
+  final rem = initialReminder ?? DateTime(now.year, now.month, now.day, 9, 0);
+  return showModalBottomSheet<_DateReminderResult>(
+    context: context,
+    isScrollControlled: true,
+    backgroundColor: Colors.transparent,
+    builder: (ctx) => _DateTimeReminderSheetContent(
+      initialDueDate: due,
+      initialReminder: rem,
+    ),
+  );
+}
+
+class _DateTimeReminderSheetContent extends StatefulWidget {
+  const _DateTimeReminderSheetContent({
+    required this.initialDueDate,
+    required this.initialReminder,
+  });
+
+  final DateTime initialDueDate;
+  final DateTime initialReminder;
+
+  @override
+  State<_DateTimeReminderSheetContent> createState() =>
+      _DateTimeReminderSheetContentState();
+}
+
+class _DateTimeReminderSheetContentState
+    extends State<_DateTimeReminderSheetContent> {
+  late DateTime _selectedDate;
+  TimeOfDay? _dueTime;
+  TimeOfDay? _reminderTime;
+  late DateTime _calendarMonth;
+
+  static const _defaultReminder = TimeOfDay(hour: 9, minute: 0);
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedDate = DateTime(
+      widget.initialDueDate.year,
+      widget.initialDueDate.month,
+      widget.initialDueDate.day,
+    );
+    _dueTime =
+        widget.initialDueDate.hour != 0 || widget.initialDueDate.minute != 0
+        ? TimeOfDay.fromDateTime(widget.initialDueDate)
+        : null;
+    _reminderTime =
+        widget.initialReminder.hour != 0 || widget.initialReminder.minute != 0
+        ? TimeOfDay.fromDateTime(widget.initialReminder)
+        : _defaultReminder;
+    _calendarMonth = DateTime(_selectedDate.year, _selectedDate.month);
+  }
+
+  void _confirm() {
+    final due = _dueTime == null
+        ? DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day)
+        : DateTime(
+            _selectedDate.year,
+            _selectedDate.month,
+            _selectedDate.day,
+            _dueTime!.hour,
+            _dueTime!.minute,
+          );
+    final reminder = _reminderTime == null
+        ? null
+        : DateTime(
+            _selectedDate.year,
+            _selectedDate.month,
+            _selectedDate.day,
+            _reminderTime!.hour,
+            _reminderTime!.minute,
+          );
+    Navigator.pop(context, (due, reminder));
+  }
+
+  void _selectQuick(DateTime date, {TimeOfDay? time}) {
+    setState(() {
+      _selectedDate = DateTime(date.year, date.month, date.day);
+      if (time != null) _dueTime = time;
+      _calendarMonth = DateTime(date.year, date.month);
+    });
+  }
+
+  static DateTime _nextMonday(DateTime from) {
+    var d = DateTime(from.year, from.month, from.day);
+    while (d.weekday != DateTime.monday) {
+      d = d.add(const Duration(days: 1));
+    }
+    if (d.isBefore(from) || d.isAtSameMomentAs(from)) {
+      d = d.add(const Duration(days: 7));
+    }
+    return d;
+  }
+
+  DateTime get _now => DateTime.now();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final primary = theme.colorScheme.primary;
+    final now = _now;
+    final today = DateTime(now.year, now.month, now.day);
+    final tomorrow = today.add(const Duration(days: 1));
+
+    final maxHeight = MediaQuery.of(context).size.height * 0.85;
+    return Padding(
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).viewInsets.bottom,
+      ),
+      child: Container(
+        constraints: BoxConstraints(maxHeight: maxHeight),
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surface,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+        ),
+        child: SafeArea(
+          top: false,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              _buildHeader(theme, primary),
+              const Divider(height: 1),
+              Flexible(
+                child: SingleChildScrollView(
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        const SizedBox(height: 16),
+                        _buildQuickChips(theme, primary, today, tomorrow),
+                        const SizedBox(height: 20),
+                        _buildCalendar(theme, primary),
+                        const SizedBox(height: 20),
+                        _buildTimeRow(theme),
+                        _buildReminderRow(theme, primary),
+                        _buildRepeatRow(theme),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHeader(ThemeData theme, Color primary) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+      child: Row(
+        children: [
+          IconButton(
+            icon: const Icon(Icons.close),
+            onPressed: () => Navigator.pop(context),
+          ),
+          Expanded(
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(vertical: 8),
+                  decoration: BoxDecoration(
+                    border: Border(
+                      bottom: BorderSide(color: primary, width: 2),
+                    ),
+                  ),
+                  child: Text(
+                    'Date',
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      color: primary,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 24),
+                Text(
+                  'Duration',
+                  style: theme.textTheme.titleSmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          IconButton(
+            icon: Icon(Icons.check, color: primary),
+            onPressed: _confirm,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildQuickChips(
+    ThemeData theme,
+    Color primary,
+    DateTime today,
+    DateTime tomorrow,
+  ) {
+    final now = _now;
+    final isToday =
+        _selectedDate.year == today.year &&
+        _selectedDate.month == today.month &&
+        _selectedDate.day == today.day;
+    final isTomorrow =
+        _selectedDate.year == tomorrow.year &&
+        _selectedDate.month == tomorrow.month &&
+        _selectedDate.day == tomorrow.day;
+    final nextMon = _nextMonday(now);
+    final isNextMonday =
+        _selectedDate.year == nextMon.year &&
+        _selectedDate.month == nextMon.month &&
+        _selectedDate.day == nextMon.day;
+    final isTomorrowMorning =
+        _selectedDate.year == tomorrow.year &&
+        _selectedDate.month == tomorrow.month &&
+        _selectedDate.day == tomorrow.day &&
+        _dueTime?.hour == 9 &&
+        _dueTime?.minute == 0;
+
+    return Row(
+      children: [
+        _quickChip(
+          theme,
+          primary,
+          label: 'Today',
+          icon: Icons.calendar_today,
+          selected: isToday,
+          onTap: () => _selectQuick(today),
+        ),
+        const SizedBox(width: 8),
+        _quickChip(
+          theme,
+          primary,
+          label: 'Tomorrow',
+          icon: Icons.wb_sunny_outlined,
+          selected: isTomorrow && !isTomorrowMorning,
+          onTap: () => _selectQuick(tomorrow),
+        ),
+        const SizedBox(width: 8),
+        _quickChip(
+          theme,
+          primary,
+          label: 'Next Monday',
+          icon: Icons.calendar_today,
+          selected: isNextMonday,
+          onTap: () => _selectQuick(nextMon),
+        ),
+        const SizedBox(width: 8),
+        _quickChip(
+          theme,
+          primary,
+          label: 'Tomorrow Morning',
+          icon: Icons.wb_sunny_outlined,
+          selected: isTomorrowMorning,
+          onTap: () => _selectQuick(tomorrow, time: _defaultReminder),
+        ),
+      ],
+    );
+  }
+
+  Widget _quickChip(
+    ThemeData theme,
+    Color primary, {
+    required String label,
+    required IconData icon,
+    required bool selected,
+    required VoidCallback onTap,
+  }) {
+    return Expanded(
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(8),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  icon,
+                  size: 24,
+                  color: selected
+                      ? primary
+                      : theme.colorScheme.onSurfaceVariant,
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  label,
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: selected
+                        ? primary
+                        : theme.colorScheme.onSurfaceVariant,
+                  ),
+                  textAlign: TextAlign.center,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCalendar(ThemeData theme, Color primary) {
+    const weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    final first = DateTime(_calendarMonth.year, _calendarMonth.month);
+    final last = DateTime(_calendarMonth.year, _calendarMonth.month + 1, 0);
+    final startOffset = first.weekday - 1;
+    final days = <int>[];
+    for (var i = 0; i < startOffset; i++) {
+      days.add(0);
+    }
+    for (var d = 1; d <= last.day; d++) {
+      days.add(d);
+    }
+
+    return Column(
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(_monthYear(first), style: theme.textTheme.titleMedium),
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.chevron_left),
+                  onPressed: () => setState(() {
+                    _calendarMonth = DateTime(
+                      _calendarMonth.year,
+                      _calendarMonth.month - 1,
+                    );
+                  }),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.chevron_right),
+                  onPressed: () => setState(() {
+                    _calendarMonth = DateTime(
+                      _calendarMonth.year,
+                      _calendarMonth.month + 1,
+                    );
+                  }),
+                ),
+              ],
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        GridView.count(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          crossAxisCount: 7,
+          mainAxisSpacing: 4,
+          crossAxisSpacing: 4,
+          childAspectRatio: 1.2,
+          children: [
+            for (final w in weekdays)
+              Center(
+                child: Text(
+                  w,
+                  style: theme.textTheme.labelSmall?.copyWith(
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              ),
+            for (final d in days)
+              d == 0
+                  ? const SizedBox.shrink()
+                  : _dayCell(theme, primary, d, first.year, first.month),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _dayCell(
+    ThemeData theme,
+    Color primary,
+    int day,
+    int year,
+    int month,
+  ) {
+    final date = DateTime(year, month, day);
+    final isSelected =
+        _selectedDate.year == year &&
+        _selectedDate.month == month &&
+        _selectedDate.day == day;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () => setState(() => _selectedDate = date),
+        borderRadius: BorderRadius.circular(20),
+        child: Center(
+          child: Container(
+            width: 36,
+            height: 36,
+            decoration: isSelected
+                ? BoxDecoration(color: primary, shape: BoxShape.circle)
+                : null,
+            child: Center(
+              child: Text(
+                '$day',
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: isSelected
+                      ? theme.colorScheme.onPrimary
+                      : theme.colorScheme.onSurface,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  static String _monthYear(DateTime d) {
+    const m = [
+      'January',
+      'February',
+      'March',
+      'April',
+      'May',
+      'June',
+      'July',
+      'August',
+      'September',
+      'October',
+      'November',
+      'December',
+    ];
+    return '${m[d.month - 1]} ${d.year}';
+  }
+
+  Widget _buildTimeRow(ThemeData theme) {
+    return ListTile(
+      contentPadding: EdgeInsets.zero,
+      leading: Icon(
+        Icons.schedule,
+        size: 22,
+        color: theme.colorScheme.onSurfaceVariant,
+      ),
+      title: Text('Time', style: theme.textTheme.bodyLarge),
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            _dueTime == null ? 'None' : _formatTime(_dueTime!),
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+          IconButton(
+            icon: const Icon(Icons.chevron_right, size: 20),
+            onPressed: () async {
+              final t = await showTimePicker(
+                context: context,
+                initialTime: _dueTime ?? _defaultReminder,
+              );
+              if (t != null && mounted) setState(() => _dueTime = t);
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildReminderRow(ThemeData theme, Color primary) {
+    return ListTile(
+      contentPadding: EdgeInsets.zero,
+      leading: Icon(
+        Icons.alarm,
+        size: 22,
+        color: theme.colorScheme.onSurfaceVariant,
+      ),
+      title: Text('Reminder', style: theme.textTheme.bodyLarge),
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (_reminderTime != null) ...[
+            Text(
+              'On the day (${_formatTime(_reminderTime!)})',
+              style: theme.textTheme.bodyMedium?.copyWith(color: primary),
+            ),
+            IconButton(
+              icon: Icon(
+                Icons.close,
+                size: 18,
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+              onPressed: () => setState(() => _reminderTime = null),
+            ),
+          ] else
+            Text(
+              'None',
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
+            ),
+          IconButton(
+            icon: const Icon(Icons.chevron_right, size: 20),
+            onPressed: () async {
+              final t = await showTimePicker(
+                context: context,
+                initialTime: _reminderTime ?? _defaultReminder,
+              );
+              if (t != null && mounted) setState(() => _reminderTime = t);
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRepeatRow(ThemeData theme) {
+    return ListTile(
+      contentPadding: EdgeInsets.zero,
+      leading: Icon(
+        Icons.repeat,
+        size: 22,
+        color: theme.colorScheme.onSurfaceVariant,
+      ),
+      title: Text('Repeat', style: theme.textTheme.bodyLarge),
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            'None',
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+          const Icon(Icons.chevron_right, size: 20),
+        ],
+      ),
+    );
+  }
+
+  static String _formatTime(TimeOfDay t) =>
+      '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
+}
+
 class _AddTaskSheetContent extends StatefulWidget {
   const _AddTaskSheetContent({
     required this.listId,
@@ -1106,61 +1665,17 @@ class _AddTaskSheetContentState extends State<_AddTaskSheetContent> {
     super.dispose();
   }
 
-  Future<void> _pickDueDate() async {
-    final now = DateTime.now();
-    final picked = await showDatePicker(
-      context: context,
-      initialDate: _dueDate ?? now,
-      firstDate: DateTime(2000),
-      lastDate: DateTime(2100),
+  Future<void> _pickDateAndReminder() async {
+    final result = await _showDateTimeReminderSheet(
+      context,
+      initialDueDate: _dueDate,
+      initialReminder: _reminder,
     );
-    if (picked == null) return;
-    if (!mounted) return;
-    final time = await showTimePicker(
-      context: context,
-      initialTime: _dueDate != null
-          ? TimeOfDay.fromDateTime(_dueDate!)
-          : TimeOfDay.fromDateTime(now),
-    );
-    if (time != null && mounted) {
-      setState(
-        () => _dueDate = DateTime(
-          picked.year,
-          picked.month,
-          picked.day,
-          time.hour,
-          time.minute,
-        ),
-      );
-    }
-  }
-
-  Future<void> _pickReminder() async {
-    final now = DateTime.now();
-    final date = await showDatePicker(
-      context: context,
-      initialDate: _reminder ?? now,
-      firstDate: DateTime(2000),
-      lastDate: DateTime(2100),
-    );
-    if (date == null) return;
-    if (!mounted) return;
-    final time = await showTimePicker(
-      context: context,
-      initialTime: _reminder != null
-          ? TimeOfDay.fromDateTime(_reminder!)
-          : TimeOfDay.fromDateTime(now),
-    );
-    if (time != null && mounted) {
-      setState(
-        () => _reminder = DateTime(
-          date.year,
-          date.month,
-          date.day,
-          time.hour,
-          time.minute,
-        ),
-      );
+    if (result != null && mounted) {
+      setState(() {
+        _dueDate = result.$1;
+        _reminder = result.$2;
+      });
     }
   }
 
@@ -1239,7 +1754,7 @@ class _AddTaskSheetContentState extends State<_AddTaskSheetContent> {
                 children: [
                   InkWell(
                     borderRadius: BorderRadius.circular(20),
-                    onTap: _pickDueDate,
+                    onTap: _pickDateAndReminder,
                     child: Padding(
                       padding: const EdgeInsets.symmetric(
                         horizontal: 4,
@@ -1249,11 +1764,11 @@ class _AddTaskSheetContentState extends State<_AddTaskSheetContent> {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Icon(
-                            _dueDate != null
+                            _dueDate != null || _reminder != null
                                 ? Icons.calendar_today
                                 : Icons.calendar_today_outlined,
                             size: 22,
-                            color: _dueDate != null
+                            color: _dueDate != null || _reminder != null
                                 ? primary
                                 : theme.colorScheme.onSurfaceVariant,
                           ),
@@ -1266,32 +1781,7 @@ class _AddTaskSheetContentState extends State<_AddTaskSheetContent> {
                               ),
                             ),
                           ],
-                        ],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 4),
-                  InkWell(
-                    borderRadius: BorderRadius.circular(20),
-                    onTap: _pickReminder,
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 4,
-                        vertical: 8,
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            _reminder != null
-                                ? Icons.notifications
-                                : Icons.notifications_outlined,
-                            size: 22,
-                            color: _reminder != null
-                                ? primary
-                                : theme.colorScheme.onSurfaceVariant,
-                          ),
-                          if (_reminder != null) ...[
+                          if (_reminder != null && _dueDate == null) ...[
                             const SizedBox(width: 6),
                             Text(
                               widget.formatDueDate(_reminder!),
