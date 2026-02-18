@@ -1911,6 +1911,7 @@ class _TaskEditSheetContentState extends State<_TaskEditSheetContent> {
       notes: notes,
       dueDate: _dueDate,
       reminder: _reminder,
+      clearReminder: _reminder == null,
     );
     if (_reminder != null) {
       widget.notificationService.scheduleReminder(id, title, _reminder!);
@@ -2016,6 +2017,10 @@ class _TaskEditSheetContentState extends State<_TaskEditSheetContent> {
                                   color: primary,
                                 ),
                               ),
+                            ],
+                            if (_reminder != null) ...[
+                              const SizedBox(width: 6),
+                              Icon(Icons.alarm, size: 14, color: primary),
                             ],
                           ],
                         ),

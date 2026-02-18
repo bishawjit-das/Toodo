@@ -137,6 +137,7 @@ class TaskRepository {
     DateTime? dueDate,
     String? dueTime,
     DateTime? reminder,
+    bool clearReminder = false,
     String? repeat,
     int? priority,
     int? sortOrder,
@@ -149,7 +150,9 @@ class TaskRepository {
         notes: notes != null ? Value(notes) : const Value.absent(),
         dueDate: dueDate != null ? Value(dueDate) : const Value.absent(),
         dueTime: dueTime != null ? Value(dueTime) : const Value.absent(),
-        reminder: reminder != null ? Value(reminder) : const Value.absent(),
+        reminder: clearReminder
+            ? const Value(null)
+            : (reminder != null ? Value(reminder) : const Value.absent()),
         repeat: repeat != null ? Value(repeat) : const Value.absent(),
         priority: priority != null ? Value(priority) : const Value.absent(),
         sortOrder: sortOrder != null ? Value(sortOrder) : const Value.absent(),

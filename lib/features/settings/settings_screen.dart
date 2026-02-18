@@ -46,6 +46,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             icon: const Icon(Icons.arrow_back),
             onPressed: () => context.pop(),
           ),
+          titleSpacing: 0,
           title: const Text('Settings'),
         ),
         body: const Center(child: Text('Settings not available')),
@@ -60,6 +61,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             icon: const Icon(Icons.arrow_back),
             onPressed: () => context.pop(),
           ),
+          titleSpacing: 0,
           title: const Text('Settings'),
         ),
         body: ListView(
