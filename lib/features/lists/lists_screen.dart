@@ -249,10 +249,13 @@ class _ListsScreenState extends State<ListsScreen> with WidgetsBindingObserver {
             (context) => Text(_titleFor(), style: TextStyle(fontSize: 18)),
           ),
           actions: [
-            IconButton(
-              key: const Key('settings'),
-              icon: const Icon(Icons.settings),
-              onPressed: () => context.go('/settings'),
+            Padding(
+              padding: const EdgeInsets.only(right: 5.0),
+              child: IconButton(
+                key: const Key('settings'),
+                icon: const Icon(Icons.settings),
+                onPressed: () => context.go('/settings'),
+              ),
             ),
           ],
         ),
@@ -1073,7 +1076,8 @@ Future<_DateReminderResult?> _showDateTimeReminderSheet(
   DateTime? initialReminder,
 }) async {
   final now = DateTime.now();
-  final due = initialDueDate ?? now;
+  final today = DateTime(now.year, now.month, now.day);
+  final due = initialDueDate ?? today;
   final rem = initialReminder ?? DateTime(now.year, now.month, now.day, 9, 0);
   return showModalBottomSheet<_DateReminderResult>(
     context: context,
@@ -1105,7 +1109,7 @@ class _DateTimeReminderSheetContentState
   late DateTime _selectedDate;
   TimeOfDay? _dueTime;
   TimeOfDay? _reminderTime;
-  late DateTime _calendarMonth;
+  int _quickChipTapCount = 0;
 
   static const _defaultReminder = TimeOfDay(hour: 9, minute: 0);
 
@@ -1125,7 +1129,6 @@ class _DateTimeReminderSheetContentState
         widget.initialReminder.hour != 0 || widget.initialReminder.minute != 0
         ? TimeOfDay.fromDateTime(widget.initialReminder)
         : _defaultReminder;
-    _calendarMonth = DateTime(_selectedDate.year, _selectedDate.month);
   }
 
   void _confirm() {
@@ -1154,7 +1157,7 @@ class _DateTimeReminderSheetContentState
     setState(() {
       _selectedDate = DateTime(date.year, date.month, date.day);
       if (time != null) _dueTime = time;
-      _calendarMonth = DateTime(date.year, date.month);
+      _quickChipTapCount++;
     });
   }
 
@@ -1193,27 +1196,30 @@ class _DateTimeReminderSheetContentState
         child: SafeArea(
           top: false,
           child: Column(
-            mainAxisSize: MainAxisSize.min,
+            mainAxisSize: MainAxisSize.max,
             children: [
               _buildHeader(theme, primary),
               const Divider(height: 1),
               Flexible(
                 child: SingleChildScrollView(
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        const SizedBox(height: 16),
-                        _buildQuickChips(theme, primary, today, tomorrow),
-                        const SizedBox(height: 20),
-                        _buildCalendar(theme, primary),
-                        const SizedBox(height: 20),
-                        _buildTimeRow(theme),
-                        _buildReminderRow(theme, primary),
-                        _buildRepeatRow(theme),
-                      ],
-                    ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const SizedBox(height: 16),
+                      _buildQuickChips(theme, primary, today, tomorrow),
+                      _buildCalendar(theme, primary),
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(24, 0, 24, 0),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _buildTimeRow(theme),
+                            _buildReminderRow(theme, primary),
+                            _buildRepeatRow(theme),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),
@@ -1374,7 +1380,7 @@ class _DateTimeReminderSheetContentState
                         : theme.colorScheme.onSurfaceVariant,
                   ),
                   textAlign: TextAlign.center,
-                  maxLines: 1,
+                  maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                 ),
               ],
@@ -1386,164 +1392,50 @@ class _DateTimeReminderSheetContentState
   }
 
   Widget _buildCalendar(ThemeData theme, Color primary) {
-    const weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-    final first = DateTime(_calendarMonth.year, _calendarMonth.month);
-    final last = DateTime(_calendarMonth.year, _calendarMonth.month + 1, 0);
-    final startOffset = first.weekday - 1;
-    final days = <int>[];
-    for (var i = 0; i < startOffset; i++) {
-      days.add(0);
-    }
-    for (var d = 1; d <= last.day; d++) {
-      days.add(d);
-    }
-
-    return Column(
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(_monthYear(first), style: theme.textTheme.titleMedium),
-            Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                IconButton(
-                  icon: const Icon(Icons.chevron_left),
-                  onPressed: () => setState(() {
-                    _calendarMonth = DateTime(
-                      _calendarMonth.year,
-                      _calendarMonth.month - 1,
-                    );
-                  }),
-                ),
-                IconButton(
-                  icon: const Icon(Icons.chevron_right),
-                  onPressed: () => setState(() {
-                    _calendarMonth = DateTime(
-                      _calendarMonth.year,
-                      _calendarMonth.month + 1,
-                    );
-                  }),
-                ),
-              ],
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        GridView.count(
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          crossAxisCount: 7,
-          mainAxisSpacing: 4,
-          crossAxisSpacing: 4,
-          childAspectRatio: 1.2,
-          children: [
-            for (final w in weekdays)
-              Center(
-                child: Text(
-                  w,
-                  style: theme.textTheme.labelSmall?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
-                  ),
-                ),
-              ),
-            for (final d in days)
-              d == 0
-                  ? const SizedBox.shrink()
-                  : _dayCell(theme, primary, d, first.year, first.month),
-          ],
-        ),
-      ],
-    );
-  }
-
-  Widget _dayCell(
-    ThemeData theme,
-    Color primary,
-    int day,
-    int year,
-    int month,
-  ) {
-    final date = DateTime(year, month, day);
-    final isSelected =
-        _selectedDate.year == year &&
-        _selectedDate.month == month &&
-        _selectedDate.day == day;
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: () => setState(() => _selectedDate = date),
-        borderRadius: BorderRadius.circular(20),
-        child: Center(
-          child: Container(
-            width: 36,
-            height: 36,
-            decoration: isSelected
-                ? BoxDecoration(color: primary, shape: BoxShape.circle)
-                : null,
-            child: Center(
-              child: Text(
-                '$day',
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: isSelected
-                      ? theme.colorScheme.onPrimary
-                      : theme.colorScheme.onSurface,
-                ),
-              ),
-            ),
-          ),
-        ),
+    // Key forces rebuild so quick chips always navigate calendar to the chip's month (even if date unchanged).
+    return CalendarDatePicker(
+      key: ValueKey(
+        '${_selectedDate.year}-${_selectedDate.month}-$_quickChipTapCount',
       ),
+      initialDate: _selectedDate,
+      firstDate: DateTime(2000),
+      lastDate: DateTime(2100),
+      currentDate: DateTime.now(),
+      onDateChanged: (d) => setState(() => _selectedDate = d),
     );
-  }
-
-  static String _monthYear(DateTime d) {
-    const m = [
-      'January',
-      'February',
-      'March',
-      'April',
-      'May',
-      'June',
-      'July',
-      'August',
-      'September',
-      'October',
-      'November',
-      'December',
-    ];
-    return '${m[d.month - 1]} ${d.year}';
   }
 
   Widget _buildTimeRow(ThemeData theme) {
     return ListTile(
       contentPadding: EdgeInsets.zero,
+      horizontalTitleGap: 0,
       leading: Icon(
         Icons.schedule,
         size: 22,
         color: theme.colorScheme.onSurfaceVariant,
       ),
       title: Text('Time', style: theme.textTheme.bodyLarge),
-      trailing: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            _dueTime == null ? 'None' : _formatTime(_dueTime!),
-            style: theme.textTheme.bodyMedium?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
+      trailing: InkWell(
+        onTap: () async {
+          final t = await showTimePicker(
+            context: context,
+            initialTime: _dueTime ?? _nextThirtyMinMark(DateTime.now()),
+          );
+          if (t != null && mounted) setState(() => _dueTime = t);
+        },
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.end,
+          children: [
+            Text(
+              _dueTime == null ? 'None' : _formatTime(_dueTime!),
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
             ),
-          ),
-          IconButton(
-            icon: const Icon(Icons.chevron_right, size: 20),
-            onPressed: () async {
-              final t = await showTimePicker(
-                context: context,
-                initialTime: _dueTime ?? _defaultReminder,
-              );
-              if (t != null && mounted) setState(() => _dueTime = t);
-            },
-          ),
-        ],
+            const Icon(Icons.chevron_right, size: 20),
+          ],
+        ),
       ),
     );
   }
@@ -1551,6 +1443,7 @@ class _DateTimeReminderSheetContentState
   Widget _buildReminderRow(ThemeData theme, Color primary) {
     return ListTile(
       contentPadding: EdgeInsets.zero,
+      horizontalTitleGap: 0,
       leading: Icon(
         Icons.alarm,
         size: 22,
@@ -1561,35 +1454,50 @@ class _DateTimeReminderSheetContentState
         mainAxisSize: MainAxisSize.min,
         children: [
           if (_reminderTime != null) ...[
-            Text(
-              'On the day (${_formatTime(_reminderTime!)})',
-              style: theme.textTheme.bodyMedium?.copyWith(color: primary),
-            ),
-            IconButton(
-              icon: Icon(
-                Icons.close,
-                size: 18,
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
-              onPressed: () => setState(() => _reminderTime = null),
-            ),
-          ] else
-            Text(
-              'None',
-              style: theme.textTheme.bodyMedium?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
+            InkWell(
+              onTap: () => setState(() => _reminderTime = null),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'On the day (${_formatTime(_reminderTime!)})',
+                    style: theme.textTheme.bodyMedium?.copyWith(color: primary),
+                  ),
+                  Icon(
+                    Icons.close,
+                    size: 18,
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ],
               ),
             ),
-          IconButton(
-            icon: const Icon(Icons.chevron_right, size: 20),
-            onPressed: () async {
-              final t = await showTimePicker(
-                context: context,
-                initialTime: _reminderTime ?? _defaultReminder,
-              );
-              if (t != null && mounted) setState(() => _reminderTime = t);
-            },
-          ),
+          ] else ...[
+            InkWell(
+              onTap: () async {
+                final t = await showTimePicker(
+                  context: context,
+                  initialTime: _reminderTime ?? _defaultReminder,
+                );
+                if (t != null && mounted) setState(() => _reminderTime = t);
+              },
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    'None',
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                  Icon(
+                    Icons.chevron_right,
+                    size: 20,
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
+                ],
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -1598,6 +1506,7 @@ class _DateTimeReminderSheetContentState
   Widget _buildRepeatRow(ThemeData theme) {
     return ListTile(
       contentPadding: EdgeInsets.zero,
+      horizontalTitleGap: 0,
       leading: Icon(
         Icons.repeat,
         size: 22,
@@ -1619,8 +1528,19 @@ class _DateTimeReminderSheetContentState
     );
   }
 
-  static String _formatTime(TimeOfDay t) =>
-      '${t.hour.toString().padLeft(2, '0')}:${t.minute.toString().padLeft(2, '0')}';
+  /// Next :00 or :30 mark from [from]. E.g. 10:33 → 11:00, 11:01 → 11:30.
+  static TimeOfDay _nextThirtyMinMark(DateTime from) {
+    final minute = from.minute;
+    if (minute < 30) return TimeOfDay(hour: from.hour, minute: 30);
+    return TimeOfDay(hour: (from.hour + 1) % 24, minute: 0);
+  }
+
+  static String _formatTime(TimeOfDay t) {
+    final hour = t.hourOfPeriod == 0 ? 12 : t.hourOfPeriod;
+    final minute = t.minute.toString().padLeft(2, '0');
+    final period = t.period == DayPeriod.am ? 'AM' : 'PM';
+    return '$hour:$minute$period';
+  }
 }
 
 class _AddTaskSheetContent extends StatefulWidget {
