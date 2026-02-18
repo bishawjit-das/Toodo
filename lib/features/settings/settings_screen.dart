@@ -15,6 +15,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
   late SwipeAction _leftSwipeAction;
   late SwipeAction _rightSwipeAction;
   late Color _accentColor;
+  static const _settingsTitleStyle = TextStyle(fontSize: 16);
+  static const _settingsSubtitleStyle = TextStyle(fontSize: 14);
 
   @override
   void didChangeDependencies() {
@@ -63,22 +65,31 @@ class _SettingsScreenState extends State<SettingsScreen> {
         body: ListView(
           children: [
             ListTile(
-              title: const Text('Theme'),
-              subtitle: Text(_themeMode.name),
+              title: const Text('Theme', style: _settingsTitleStyle),
+              subtitle: Text(
+                _themeMode.name[0].toUpperCase() + _themeMode.name.substring(1),
+                style: _settingsSubtitleStyle,
+              ),
               onTap: () => _showThemePicker(context),
             ),
             ListTile(
-              title: const Text('Left swipe'),
-              subtitle: Text(_labelForSwipeAction(_leftSwipeAction)),
+              title: const Text('Left swipe', style: _settingsTitleStyle),
+              subtitle: Text(
+                _labelForSwipeAction(_leftSwipeAction),
+                style: _settingsSubtitleStyle,
+              ),
               onTap: () => _showSwipeActionPicker(context, isLeft: true),
             ),
             ListTile(
-              title: const Text('Right swipe'),
-              subtitle: Text(_labelForSwipeAction(_rightSwipeAction)),
+              title: const Text('Right swipe', style: _settingsTitleStyle),
+              subtitle: Text(
+                _labelForSwipeAction(_rightSwipeAction),
+                style: _settingsSubtitleStyle,
+              ),
               onTap: () => _showSwipeActionPicker(context, isLeft: false),
             ),
             ListTile(
-              title: const Text('Accent color'),
+              title: const Text('Accent color', style: _settingsTitleStyle),
               subtitle: Row(
                 children: [
                   Container(
@@ -91,7 +102,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ),
                   ),
                   const SizedBox(width: 8),
-                  const Text('Tap to change'),
+                  const Text('Tap to change', style: _settingsSubtitleStyle),
                 ],
               ),
               onTap: () => _showAccentColorPicker(context),
@@ -111,7 +122,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
           children: ThemeMode.values
               .map(
                 (mode) => ListTile(
-                  title: Text(mode.name),
+                  title: Text(
+                    mode.name[0].toUpperCase() + mode.name.substring(1),
+                    style: _settingsTitleStyle,
+                  ),
                   onTap: () async {
                     final scope = RepositoryScope.of(context);
                     await scope.settingsRepository?.setThemeMode(mode);
@@ -144,7 +158,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
           children: SwipeAction.values
               .map(
                 (action) => ListTile(
-                  title: Text(_labelForSwipeAction(action)),
+                  title: Text(
+                    _labelForSwipeAction(action),
+                    style: _settingsTitleStyle,
+                  ),
                   onTap: () async {
                     final scope = RepositoryScope.of(context);
                     if (isLeft) {

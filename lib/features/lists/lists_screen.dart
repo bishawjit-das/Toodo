@@ -102,6 +102,7 @@ class _ListsScreenState extends State<ListsScreen> with WidgetsBindingObserver {
   void _applyTaskFilter(List<Task> data) {
     if (_ignoreNextTaskEmission) {
       _ignoreNextTaskEmission = false;
+      if (mounted) setState(() => _tasksLoaded = true);
       return;
     }
     if (_selectedVirtualKey != null) {
@@ -362,9 +363,9 @@ class _ListsScreenState extends State<ListsScreen> with WidgetsBindingObserver {
       if (!_tasksLoaded) {
         return const Center(
           child: SizedBox(
-            width: 15,
-            height: 15,
-            child: CircularProgressIndicator(strokeWidth: 1),
+            width: 20,
+            height: 20,
+            child: CircularProgressIndicator(strokeWidth: 2),
           ),
         );
       }
@@ -399,39 +400,28 @@ class _ListsScreenState extends State<ListsScreen> with WidgetsBindingObserver {
                 runSpacing: 2,
                 children: [
                   if (task.dueDate != null)
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.calendar_today, size: 14, color: primary),
-                        const SizedBox(width: 2),
-                        Text(
-                          _formatDueDate(task.dueDate!),
-                          style: Theme.of(
-                            context,
-                          ).textTheme.bodySmall?.copyWith(color: primary),
-                        ),
-                      ],
+                    Text(
+                      _formatDueDate(task.dueDate!),
+                      style: Theme.of(
+                        context,
+                      ).textTheme.bodySmall?.copyWith(color: primary),
                     ),
                   if (task.reminder != null)
-                    Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(Icons.notifications, size: 14, color: primary),
-                        const SizedBox(width: 2),
-                        Text(
-                          _formatDueDate(task.reminder!),
-                          style: Theme.of(
-                            context,
-                          ).textTheme.bodySmall?.copyWith(color: primary),
-                        ),
-                      ],
+                    Text(
+                      _formatDueDate(task.reminder!),
+                      style: Theme.of(
+                        context,
+                      ).textTheme.bodySmall?.copyWith(color: primary),
                     ),
                 ],
               ),
           ];
           final tile = ListTile(
-            contentPadding: const EdgeInsets.symmetric(horizontal: 4),
-            dense: true,
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 4,
+              vertical: 2,
+            ),
+            dense: false,
             horizontalTitleGap: 4,
             minLeadingWidth: 32,
             leading: Checkbox(
@@ -717,6 +707,7 @@ class _ListsScreenState extends State<ListsScreen> with WidgetsBindingObserver {
 
   static const _drawerTileGap = 8.0;
   static const _drawerTileLead = 32.0;
+  static const _drawerTitleStyle = TextStyle(fontSize: 14);
 
   Widget _buildDrawer(BuildContext context) {
     void selectVirtual(String key) {
@@ -747,111 +738,119 @@ class _ListsScreenState extends State<ListsScreen> with WidgetsBindingObserver {
           });
         },
         child: SafeArea(
-          child: ListView(
-            padding: EdgeInsets.zero,
-            children: [
-              // Section 1: Inbox, Today, Tomorrow, Next 7 days, All
-              Watch((context) {
-                final inbox = _listsSignal.value
-                    .where((l) => l.name == _inboxName)
-                    .firstOrNull;
-                if (inbox == null) return const SizedBox.shrink();
-                return ListTile(
-                  leading: const Icon(Icons.inbox, size: 22),
-                  title: const Text('Inbox'),
+          child: ListTileTheme(
+            data: ListTileTheme.of(context).copyWith(
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 2,
+              ),
+            ),
+            child: ListView(
+              padding: EdgeInsets.zero,
+              children: [
+                // Section 1: Inbox, Today, Tomorrow, Next 7 days, All
+                Watch((context) {
+                  final inbox = _listsSignal.value
+                      .where((l) => l.name == _inboxName)
+                      .firstOrNull;
+                  if (inbox == null) return const SizedBox.shrink();
+                  return ListTile(
+                    leading: const Icon(Icons.inbox, size: 22),
+                    title: const Text('Inbox', style: _drawerTitleStyle),
+                    horizontalTitleGap: _drawerTileGap,
+                    minLeadingWidth: _drawerTileLead,
+                    selected:
+                        _selectedVirtualKey == null &&
+                        _selectedListId == inbox.id,
+                    onTap: () => selectList(inbox.id),
+                    onLongPress: null,
+                  );
+                }),
+                ListTile(
+                  leading: const Icon(Icons.today, size: 22),
+                  title: const Text('Today', style: _drawerTitleStyle),
                   horizontalTitleGap: _drawerTileGap,
                   minLeadingWidth: _drawerTileLead,
-                  selected:
-                      _selectedVirtualKey == null &&
-                      _selectedListId == inbox.id,
-                  onTap: () => selectList(inbox.id),
-                  onLongPress: null,
-                );
-              }),
-              ListTile(
-                leading: const Icon(Icons.today, size: 22),
-                title: const Text('Today'),
-                horizontalTitleGap: _drawerTileGap,
-                minLeadingWidth: _drawerTileLead,
-                selected: _selectedVirtualKey == _virtualToday,
-                onTap: () => selectVirtual(_virtualToday),
-              ),
-              ListTile(
-                leading: const Icon(Icons.event, size: 22),
-                title: const Text('Tomorrow'),
-                horizontalTitleGap: _drawerTileGap,
-                minLeadingWidth: _drawerTileLead,
-                selected: _selectedVirtualKey == _virtualTomorrow,
-                onTap: () => selectVirtual(_virtualTomorrow),
-              ),
-              ListTile(
-                leading: const Icon(Icons.date_range, size: 22),
-                title: const Text('Next 7 days'),
-                horizontalTitleGap: _drawerTileGap,
-                minLeadingWidth: _drawerTileLead,
-                selected: _selectedVirtualKey == _virtualNext7,
-                onTap: () => selectVirtual(_virtualNext7),
-              ),
-              ListTile(
-                leading: const Icon(Icons.view_list, size: 22),
-                title: const Text('All'),
-                horizontalTitleGap: _drawerTileGap,
-                minLeadingWidth: _drawerTileLead,
-                selected: _selectedVirtualKey == _virtualAll,
-                onTap: () => selectVirtual(_virtualAll),
-              ),
-              const Divider(),
-              // Section 2: Custom lists (divider only when there are custom lists)
-              Watch((context) {
-                final userLists = _listsSignal.value
-                    .where((l) => l.name != _inboxName)
-                    .toList();
-                if (userLists.isEmpty) return const SizedBox.shrink();
-                return Column(
-                  children: [
-                    ...userLists.map(
-                      (list) => ListTile(
-                        leading: const Icon(Icons.list_alt, size: 22),
-                        title: Text(list.name),
-                        horizontalTitleGap: _drawerTileGap,
-                        minLeadingWidth: _drawerTileLead,
-                        selected:
-                            _selectedVirtualKey == null &&
-                            _selectedListId == list.id,
-                        onTap: () => selectList(list.id),
-                        onLongPress: () => _showListOptions(context, list),
+                  selected: _selectedVirtualKey == _virtualToday,
+                  onTap: () => selectVirtual(_virtualToday),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.event, size: 22),
+                  title: const Text('Tomorrow', style: _drawerTitleStyle),
+                  horizontalTitleGap: _drawerTileGap,
+                  minLeadingWidth: _drawerTileLead,
+                  selected: _selectedVirtualKey == _virtualTomorrow,
+                  onTap: () => selectVirtual(_virtualTomorrow),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.date_range, size: 22),
+                  title: const Text('Next 7 days', style: _drawerTitleStyle),
+                  horizontalTitleGap: _drawerTileGap,
+                  minLeadingWidth: _drawerTileLead,
+                  selected: _selectedVirtualKey == _virtualNext7,
+                  onTap: () => selectVirtual(_virtualNext7),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.view_list, size: 22),
+                  title: const Text('All', style: _drawerTitleStyle),
+                  horizontalTitleGap: _drawerTileGap,
+                  minLeadingWidth: _drawerTileLead,
+                  selected: _selectedVirtualKey == _virtualAll,
+                  onTap: () => selectVirtual(_virtualAll),
+                ),
+                const Divider(),
+                // Section 2: Custom lists (divider only when there are custom lists)
+                Watch((context) {
+                  final userLists = _listsSignal.value
+                      .where((l) => l.name != _inboxName)
+                      .toList();
+                  if (userLists.isEmpty) return const SizedBox.shrink();
+                  return Column(
+                    children: [
+                      ...userLists.map(
+                        (list) => ListTile(
+                          leading: const Icon(Icons.list_alt, size: 22),
+                          title: Text(list.name, style: _drawerTitleStyle),
+                          horizontalTitleGap: _drawerTileGap,
+                          minLeadingWidth: _drawerTileLead,
+                          selected:
+                              _selectedVirtualKey == null &&
+                              _selectedListId == list.id,
+                          onTap: () => selectList(list.id),
+                          onLongPress: () => _showListOptions(context, list),
+                        ),
                       ),
-                    ),
-                    const Divider(),
-                  ],
-                );
-              }),
-              // Section 3: Completed, Trash
-              ListTile(
-                leading: const Icon(Icons.check_circle_outline, size: 22),
-                title: const Text('Completed'),
-                horizontalTitleGap: _drawerTileGap,
-                minLeadingWidth: _drawerTileLead,
-                selected: _selectedVirtualKey == _virtualCompleted,
-                onTap: () => selectVirtual(_virtualCompleted),
-              ),
-              ListTile(
-                leading: const Icon(Icons.delete_outline, size: 22),
-                title: const Text('Trash'),
-                horizontalTitleGap: _drawerTileGap,
-                minLeadingWidth: _drawerTileLead,
-                selected: _selectedVirtualKey == _virtualTrash,
-                onTap: () => selectVirtual(_virtualTrash),
-              ),
-              const Divider(),
-              ListTile(
-                leading: const Icon(Icons.add),
-                title: const Text('Add list'),
-                horizontalTitleGap: 8,
-                minLeadingWidth: 32,
-                onTap: _showAddListDialog,
-              ),
-            ],
+                      const Divider(),
+                    ],
+                  );
+                }),
+                // Section 3: Completed, Trash
+                ListTile(
+                  leading: const Icon(Icons.check_circle_outline, size: 22),
+                  title: const Text('Completed', style: _drawerTitleStyle),
+                  horizontalTitleGap: _drawerTileGap,
+                  minLeadingWidth: _drawerTileLead,
+                  selected: _selectedVirtualKey == _virtualCompleted,
+                  onTap: () => selectVirtual(_virtualCompleted),
+                ),
+                ListTile(
+                  leading: const Icon(Icons.delete_outline, size: 22),
+                  title: const Text('Trash', style: _drawerTitleStyle),
+                  horizontalTitleGap: _drawerTileGap,
+                  minLeadingWidth: _drawerTileLead,
+                  selected: _selectedVirtualKey == _virtualTrash,
+                  onTap: () => selectVirtual(_virtualTrash),
+                ),
+                const Divider(),
+                ListTile(
+                  leading: const Icon(Icons.add),
+                  title: const Text('Add list', style: _drawerTitleStyle),
+                  horizontalTitleGap: 8,
+                  minLeadingWidth: 32,
+                  onTap: _showAddListDialog,
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -1318,41 +1317,41 @@ class _AddTaskSheetContentState extends State<_AddTaskSheetContent> {
                   ),
                 ],
               ),
-              const Divider(height: 24),
-              Text('Subtasks', style: theme.textTheme.titleSmall),
-              const SizedBox(height: 4),
-              ..._subtaskTitles.asMap().entries.map(
-                (e) => ListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: Text(e.value),
-                  trailing: IconButton(
-                    icon: const Icon(Icons.close, size: 20),
-                    onPressed: () =>
-                        setState(() => _subtaskTitles.removeAt(e.key)),
-                  ),
-                ),
-              ),
-              Row(
-                children: [
-                  Expanded(
-                    child: TextField(
-                      controller: _subtaskController,
-                      decoration: const InputDecoration(
-                        hintText: 'Add subtask',
-                        border: InputBorder.none,
-                        contentPadding: EdgeInsets.zero,
-                        isDense: true,
-                      ),
-                      textCapitalization: TextCapitalization.sentences,
-                      onSubmitted: (_) => _addSubtask(),
-                    ),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.add),
-                    onPressed: _addSubtask,
-                  ),
-                ],
-              ),
+              //   const Divider(height: 24),
+              //   Text('Subtasks', style: theme.textTheme.titleSmall),
+              //   const SizedBox(height: 4),
+              //   ..._subtaskTitles.asMap().entries.map(
+              //     (e) => ListTile(
+              //       contentPadding: EdgeInsets.zero,
+              //       title: Text(e.value),
+              //       trailing: IconButton(
+              //         icon: const Icon(Icons.close, size: 20),
+              //         onPressed: () =>
+              //             setState(() => _subtaskTitles.removeAt(e.key)),
+              //       ),
+              //     ),
+              //   ),
+              //   Row(
+              //     children: [
+              //       Expanded(
+              //         child: TextField(
+              //           controller: _subtaskController,
+              //           decoration: const InputDecoration(
+              //             hintText: 'Add subtask',
+              //             border: InputBorder.none,
+              //             contentPadding: EdgeInsets.zero,
+              //             isDense: true,
+              //           ),
+              //           textCapitalization: TextCapitalization.sentences,
+              //           onSubmitted: (_) => _addSubtask(),
+              //         ),
+              //       ),
+              //       IconButton(
+              //         icon: const Icon(Icons.add),
+              //         onPressed: _addSubtask,
+              //       ),
+              //     ],
+              //   ),
             ],
           ),
         ),
