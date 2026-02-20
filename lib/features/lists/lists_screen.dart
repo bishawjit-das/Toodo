@@ -66,6 +66,8 @@ class _ListsScreenState extends State<ListsScreen> with WidgetsBindingObserver {
   bool _isDrawerOpen = false;
 
   final _scaffoldKey = GlobalKey<ScaffoldState>();
+  Timer? _permissionTimer;
+  bool _permissionRequestScheduled = false;
 
   @override
   void initState() {
@@ -97,6 +99,12 @@ class _ListsScreenState extends State<ListsScreen> with WidgetsBindingObserver {
       _taskRepo = scope.taskRepository;
     }
     _subscribeToTasks();
+    if (!_permissionRequestScheduled) {
+      _permissionRequestScheduled = true;
+      _permissionTimer = Timer(const Duration(seconds: 5), () {
+        if (mounted) scope.notificationService.requestPermissions();
+      });
+    }
   }
 
   void _applyTaskFilter(List<Task> data) {
@@ -176,6 +184,7 @@ class _ListsScreenState extends State<ListsScreen> with WidgetsBindingObserver {
 
   @override
   void dispose() {
+    _permissionTimer?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     _sub?.cancel();
     _taskSub?.cancel();

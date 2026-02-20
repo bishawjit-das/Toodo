@@ -52,10 +52,6 @@ class NotificationService {
         onDidReceiveNotificationResponse: _onNotificationResponse,
         onDidReceiveBackgroundNotificationResponse: notificationTapBackground,
       );
-      final androidPlugin = _plugin.resolvePlatformSpecificImplementation<
-          AndroidFlutterLocalNotificationsPlugin>();
-      await androidPlugin?.requestNotificationsPermission();
-      await androidPlugin?.requestExactAlarmsPermission();
       _initialized = true;
     } catch (_) {
       // Notifications not available (e.g. in tests or unsupported platform)
@@ -76,6 +72,17 @@ class NotificationService {
     if (taskId == null) return;
     onCompleteTask?.call(taskId);
     cancelReminder(taskId);
+  }
+
+  /// Call when ready (e.g. after task screen is shown). Requests notification + exact alarm permissions.
+  Future<void> requestPermissions() async {
+    if (!_initialized) return;
+    try {
+      final androidPlugin = _plugin.resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin>();
+      await androidPlugin?.requestNotificationsPermission();
+      await androidPlugin?.requestExactAlarmsPermission();
+    } catch (_) {}
   }
 
   /// Call after init() when app starts; handles launch from notification action (e.g. app was terminated).
