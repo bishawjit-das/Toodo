@@ -454,7 +454,6 @@ class _ListsScreenState extends State<ListsScreen> with WidgetsBindingObserver {
                     children: subtitleChildren,
                   ),
             onTap: () => _showEditTaskSheet(task),
-            onLongPress: () => _showTaskOptions(context, task),
           );
           if (isTrash) return tile;
           final settings = RepositoryScope.of(context).settingsRepository;
@@ -640,64 +639,6 @@ class _ListsScreenState extends State<ListsScreen> with WidgetsBindingObserver {
         taskRepo: _taskRepository,
         notificationService: RepositoryScope.of(context).notificationService,
         formatDueDate: _formatDueDate,
-      ),
-    );
-  }
-
-  void _showTaskOptions(BuildContext context, Task task) {
-    showModalBottomSheet<void>(
-      context: context,
-      builder: (ctx) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            ListTile(
-              leading: const Icon(Icons.edit),
-              title: const Text('Edit'),
-              onTap: () {
-                Navigator.pop(ctx);
-                _showEditTaskSheet(task);
-              },
-            ),
-            ListTile(
-              leading: const Icon(Icons.delete),
-              title: const Text('Delete'),
-              onTap: () {
-                Navigator.pop(ctx);
-                _showDeleteTaskConfirm(context, task);
-              },
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  void _showDeleteTaskConfirm(BuildContext context, Task task) {
-    showDialog<void>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Delete task?'),
-        content: Text('Delete "${task.title}"?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            style: FilledButton.styleFrom(
-              backgroundColor: Theme.of(context).colorScheme.error,
-            ),
-            onPressed: () {
-              RepositoryScope.of(
-                context,
-              ).notificationService.cancelReminder(task.id);
-              _taskRepository.deleteTask(task.id);
-              if (ctx.mounted) Navigator.pop(ctx);
-            },
-            child: const Text('Delete'),
-          ),
-        ],
       ),
     );
   }
@@ -1929,7 +1870,7 @@ class _TaskEditSheetContentState extends State<_TaskEditSheetContent> {
           final title = _titleController.text.trim();
           final notes = _notesController.text.trim();
           await _saveTask(capturedTitle: title, capturedNotes: notes);
-          if (mounted) Navigator.pop(context);
+          if (context.mounted) Navigator.pop(context);
         }
       },
       child: Padding(
