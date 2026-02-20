@@ -231,6 +231,9 @@ class _ListsScreenState extends State<ListsScreen> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
+    final settings = RepositoryScope.of(context).settingsRepository;
+    final leftAction = settings?.leftSwipeAction ?? SwipeAction.trash;
+    final rightAction = settings?.rightSwipeAction ?? SwipeAction.edit;
     final isDrawerOpen =
         _scaffoldKey.currentState?.isDrawerOpen ?? _isDrawerOpen;
     return PopScope(
@@ -272,7 +275,7 @@ class _ListsScreenState extends State<ListsScreen> with WidgetsBindingObserver {
           ],
         ),
         drawer: _buildDrawer(context),
-        body: _buildTaskList(),
+        body: _buildTaskList(leftAction, rightAction),
         floatingActionButton: _buildFloatingActionButton(),
       ),
     );
@@ -372,7 +375,7 @@ class _ListsScreenState extends State<ListsScreen> with WidgetsBindingObserver {
     if (mounted) setState(() {});
   }
 
-  Widget _buildTaskList() {
+  Widget _buildTaskList(SwipeAction leftAction, SwipeAction rightAction) {
     return Watch((context) {
       final tasks = _tasksSignal.value;
       if (!_tasksLoaded) {
@@ -468,9 +471,6 @@ class _ListsScreenState extends State<ListsScreen> with WidgetsBindingObserver {
             onTap: () => _showEditTaskSheet(task),
           );
           if (isTrash) return tile;
-          final settings = RepositoryScope.of(context).settingsRepository;
-          final leftAction = settings?.leftSwipeAction ?? SwipeAction.trash;
-          final rightAction = settings?.rightSwipeAction ?? SwipeAction.edit;
           return Dismissible(
             key: ValueKey(task.id),
             direction: DismissDirection.horizontal,
@@ -1392,7 +1392,12 @@ class _DateTimeReminderSheetContentState
                   context: context,
                   initialTime: _dueTime ?? _nextThirtyMinMark(DateTime.now()),
                 );
-                if (t != null && mounted) setState(() => _dueTime = t);
+                if (t != null && mounted) {
+                  setState(() {
+                    _dueTime = t;
+                    _reminderTime = t;
+                  });
+                }
               },
               child: Row(
                 mainAxisSize: MainAxisSize.min,
@@ -1433,7 +1438,9 @@ class _DateTimeReminderSheetContentState
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(
-                    'On the day (${_formatTime(_reminderTime!)})',
+                    _reminderTime == _dueTime
+                        ? 'On time'
+                        : 'On the day (${_formatTime(_reminderTime!)})',
                     style: theme.textTheme.bodyMedium?.copyWith(color: primary),
                   ),
                   Icon(
@@ -1929,17 +1936,23 @@ class _TaskEditSheetContentState extends State<_TaskEditSheetContent> {
                 const SizedBox(height: 6),
                 TextField(
                   controller: _notesController,
-                  decoration: const InputDecoration(
+                  decoration: InputDecoration(
                     hintText: 'Description',
                     border: InputBorder.none,
                     contentPadding: EdgeInsets.zero,
                     isDense: true,
-                    hintStyle: TextStyle(fontSize: 13, color: Colors.black54),
+                    hintStyle: TextStyle(
+                      fontSize: 13,
+                      color: theme.colorScheme.onSurfaceVariant,
+                    ),
                   ),
                   maxLines: 2,
                   minLines: 1,
                   textInputAction: TextInputAction.done,
-                  style: TextStyle(fontSize: 13, color: Colors.black54),
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: theme.colorScheme.onSurface,
+                  ),
                 ),
                 const SizedBox(height: 8),
                 Row(
