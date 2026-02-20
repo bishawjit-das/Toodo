@@ -32,6 +32,7 @@ void main() async {
       settingsRepository: settingsRepo,
       themeModeNotifier: themeModeNotifier,
       accentColorNotifier: accentColorNotifier,
+      appDatabase: db,
       child: MainApp(
         themeModeNotifier: themeModeNotifier,
         accentColorNotifier: accentColorNotifier,

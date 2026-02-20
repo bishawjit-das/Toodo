@@ -5,6 +5,7 @@ const _keyThemeMode = 'theme_mode';
 const _keyLeftSwipeAction = 'left_swipe_action';
 const _keyRightSwipeAction = 'right_swipe_action';
 const _keyAccentColor = 'accent_color';
+const _keyDatabaseSeeded = 'database_seeded';
 
 /// Default accent (deepPurple).
 const Color _defaultAccent = Color(0xFF6750A4);
@@ -83,5 +84,11 @@ class SettingsRepository {
 
   Future<void> setAccentColor(Color color) async {
     await _prefs.setInt(_keyAccentColor, color.toARGB32());
+  }
+
+  bool get databaseSeeded => _prefs.getBool(_keyDatabaseSeeded) ?? false;
+
+  Future<void> setDatabaseSeeded() async {
+    await _prefs.setBool(_keyDatabaseSeeded, true);
   }
 }

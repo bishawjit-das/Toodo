@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:toodo/core/scope/repository_scope.dart';
 import 'package:toodo/core/settings/settings_repository.dart';
+import 'package:toodo/data/seed.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -15,6 +16,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   late SwipeAction _leftSwipeAction;
   late SwipeAction _rightSwipeAction;
   late Color _accentColor;
+  bool _seeding = false;
   static const _settingsTitleStyle = TextStyle(fontSize: 16);
   static const _settingsSubtitleStyle = TextStyle(fontSize: 14);
 
@@ -109,10 +111,41 @@ class _SettingsScreenState extends State<SettingsScreen> {
               ),
               onTap: () => _showAccentColorPicker(context),
             ),
+            if (!settings.databaseSeeded)
+              ListTile(
+                title: const Text('Seed database', style: _settingsTitleStyle),
+                subtitle: Text(
+                  _seeding ? 'Seeding...' : 'Insert sample lists and tasks',
+                  style: _settingsSubtitleStyle,
+                ),
+                trailing: _seeding
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : null,
+                onTap: _seeding ? null : () => _seedDatabase(context),
+              ),
           ],
         ),
       ),
     );
+  }
+
+  Future<void> _seedDatabase(BuildContext context) async {
+    final scope = RepositoryScope.of(context);
+    final db = scope.appDatabase;
+    final settings = scope.settingsRepository;
+    if (db == null || settings == null) return;
+    setState(() => _seeding = true);
+    try {
+      await seedDatabase(db);
+      await settings.setDatabaseSeeded();
+      if (mounted) setState(() {});
+    } finally {
+      if (mounted) setState(() => _seeding = false);
+    }
   }
 
   void _showThemePicker(BuildContext context) {

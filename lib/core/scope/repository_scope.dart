@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:toodo/core/notifications/notification_service.dart';
 import 'package:toodo/core/settings/settings_repository.dart';
+import 'package:toodo/data/database/app_database.dart';
 import 'package:toodo/data/repositories/list_repository.dart';
 import 'package:toodo/data/repositories/task_repository.dart';
 
@@ -13,6 +14,7 @@ class RepositoryScope extends InheritedWidget {
     this.settingsRepository,
     this.themeModeNotifier,
     this.accentColorNotifier,
+    this.appDatabase,
     required super.child,
   });
 
@@ -22,6 +24,7 @@ class RepositoryScope extends InheritedWidget {
   final SettingsRepository? settingsRepository;
   final ValueNotifier<ThemeMode>? themeModeNotifier;
   final ValueNotifier<Color>? accentColorNotifier;
+  final AppDatabase? appDatabase;
 
   static RepositoryScope of(BuildContext context) {
     final scope = context.dependOnInheritedWidgetOfExactType<RepositoryScope>();
@@ -36,5 +39,6 @@ class RepositoryScope extends InheritedWidget {
       notificationService != oldWidget.notificationService ||
       settingsRepository != oldWidget.settingsRepository ||
       themeModeNotifier != oldWidget.themeModeNotifier ||
-      accentColorNotifier != oldWidget.accentColorNotifier;
+      accentColorNotifier != oldWidget.accentColorNotifier ||
+      appDatabase != oldWidget.appDatabase;
 }
