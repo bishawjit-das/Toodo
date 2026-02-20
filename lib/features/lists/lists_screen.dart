@@ -255,7 +255,10 @@ class _ListsScreenState extends State<ListsScreen> with WidgetsBindingObserver {
             },
           ),
           title: Watch(
-            (context) => Text(_titleFor(), style: TextStyle(fontSize: 18)),
+            (context) => Text(
+              _titleFor(),
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+            ),
           ),
           actions: [
             Padding(
@@ -654,7 +657,10 @@ class _ListsScreenState extends State<ListsScreen> with WidgetsBindingObserver {
 
   static const _drawerTileGap = 8.0;
   static const _drawerTileLead = 32.0;
-  static const _drawerTitleStyle = TextStyle(fontSize: 14);
+  static const _drawerTitleStyle = TextStyle(
+    fontSize: 14,
+    fontWeight: FontWeight.w600,
+  );
 
   Widget _buildDrawer(BuildContext context) {
     void selectVirtual(String key) {
@@ -695,7 +701,15 @@ class _ListsScreenState extends State<ListsScreen> with WidgetsBindingObserver {
             child: ListView(
               padding: EdgeInsets.zero,
               children: [
-                // Section 1: Inbox, Today, Tomorrow, Next 7 days, All
+                // Section 1: All, Inbox, Today, Tomorrow, Next 7 days
+                ListTile(
+                  leading: const Icon(Icons.view_list, size: 22),
+                  title: const Text('All', style: _drawerTitleStyle),
+                  horizontalTitleGap: _drawerTileGap,
+                  minLeadingWidth: _drawerTileLead,
+                  selected: _selectedVirtualKey == _virtualAll,
+                  onTap: () => selectVirtual(_virtualAll),
+                ),
                 Watch((context) {
                   final inbox = _listsSignal.value
                       .where((l) => l.name == _inboxName)
@@ -737,16 +751,8 @@ class _ListsScreenState extends State<ListsScreen> with WidgetsBindingObserver {
                   selected: _selectedVirtualKey == _virtualNext7,
                   onTap: () => selectVirtual(_virtualNext7),
                 ),
-                ListTile(
-                  leading: const Icon(Icons.view_list, size: 22),
-                  title: const Text('All', style: _drawerTitleStyle),
-                  horizontalTitleGap: _drawerTileGap,
-                  minLeadingWidth: _drawerTileLead,
-                  selected: _selectedVirtualKey == _virtualAll,
-                  onTap: () => selectVirtual(_virtualAll),
-                ),
                 const Divider(),
-                // Section 2: Custom lists (divider only when there are custom lists)
+                // Section 2: Custom lists
                 Watch((context) {
                   final userLists = _listsSignal.value
                       .where((l) => l.name != _inboxName)
@@ -771,7 +777,7 @@ class _ListsScreenState extends State<ListsScreen> with WidgetsBindingObserver {
                     ],
                   );
                 }),
-                // Section 3: Completed, Trash
+                // Section 3: Completed, Trash, Add list
                 ListTile(
                   leading: const Icon(Icons.check_circle_outline, size: 22),
                   title: const Text('Completed', style: _drawerTitleStyle),
@@ -1616,18 +1622,24 @@ class _AddTaskSheetContentState extends State<_AddTaskSheetContent> {
               const SizedBox(height: 6),
               TextField(
                 controller: _notesController,
-                decoration: const InputDecoration(
+                decoration: InputDecoration(
                   hintText: 'Description',
                   border: InputBorder.none,
                   contentPadding: EdgeInsets.zero,
                   isDense: true,
-                  hintStyle: TextStyle(fontSize: 13, color: Colors.black54),
+                  hintStyle: TextStyle(
+                    fontSize: 13,
+                    color: theme.colorScheme.onSurfaceVariant,
+                  ),
                 ),
                 textCapitalization: TextCapitalization.sentences,
                 maxLines: 2,
                 minLines: 1,
                 textInputAction: TextInputAction.done,
-                style: TextStyle(fontSize: 13, color: Colors.black54),
+                style: TextStyle(
+                  fontSize: 13,
+                  color: theme.colorScheme.onSurface,
+                ),
                 onSubmitted: (_) => _submit(),
               ),
               const SizedBox(height: 8),
