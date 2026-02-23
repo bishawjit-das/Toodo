@@ -21,7 +21,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     fontSize: 18,
     fontWeight: FontWeight.w600,
   );
-  static const _settingsSubtitleStyle = TextStyle(fontSize: 14);
+  static const _settingsSubtitleStyle = TextStyle(fontSize: 16);
 
   @override
   void didChangeDependencies() {

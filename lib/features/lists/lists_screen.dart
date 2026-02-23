@@ -413,6 +413,7 @@ class _ListsScreenState extends State<ListsScreen> with WidgetsBindingObserver {
       }
       final isTrash = _selectedVirtualKey == _virtualTrash;
       return ListView.builder(
+        padding: const EdgeInsets.symmetric(horizontal: 10),
         itemCount: tasks.length,
         itemBuilder: (context, index) {
           final task = tasks[index];
@@ -450,8 +451,11 @@ class _ListsScreenState extends State<ListsScreen> with WidgetsBindingObserver {
               ),
           ];
           final tile = ListTile(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
             contentPadding: const EdgeInsets.symmetric(
-              horizontal: 4,
+              horizontal: 0,
               vertical: 0,
             ),
             dense: false,
@@ -466,20 +470,21 @@ class _ListsScreenState extends State<ListsScreen> with WidgetsBindingObserver {
               onChanged: isTrash ? null : (_) => _toggleTask(task),
             ),
             title: Padding(
-              padding: const EdgeInsets.only(bottom: 5),
+              padding: EdgeInsets.only(bottom: subtitleChildren.isEmpty ? 0 : 5),
               child: Text(
                 task.title,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   fontSize: 16,
-                  height: 1.2,
+                  height: 1,
                   decoration: task.completedAt != null
                       ? TextDecoration.lineThrough
                       : null,
                 ),
               ),
             ),
+            titleAlignment: ListTileTitleAlignment.center,
             subtitle: subtitleChildren.isEmpty
                 ? null
                 : Column(
