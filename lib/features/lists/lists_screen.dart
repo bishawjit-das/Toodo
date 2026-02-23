@@ -148,14 +148,26 @@ class _ListsScreenState extends State<ListsScreen> with WidgetsBindingObserver {
     } else {
       _tasksSignal.value = data.where((t) => t.completedAt == null).toList();
     }
-    if (mounted) setState(() => _tasksLoaded = true);
+    if (mounted) {
+      setState(() {
+        _tasksLoaded = true;
+        // Pre-populate only on initial load (empty set) so first paint has no animation.
+        // When not empty (e.g. after undo), newIds are revealed via post-frame callback so they animate.
+        if (_visibleTaskIds.isEmpty) {
+          _visibleTaskIds.addAll(_tasksSignal.value.map((t) => t.id));
+        }
+      });
+    }
   }
 
   void _subscribeToTasks() {
     _taskSub?.cancel();
     final repo = _taskRepo;
     if (repo == null) return;
-    setState(() => _tasksLoaded = false);
+    setState(() {
+      _tasksLoaded = false;
+      _visibleTaskIds.clear();
+    });
     if (_selectedVirtualKey == _virtualTrash) {
       _taskSub = repo.watchTrashTasks().listen(_applyTaskFilter);
     } else if (_selectedVirtualKey != null) {
