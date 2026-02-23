@@ -69,6 +69,19 @@ class _ListsScreenState extends State<ListsScreen> with WidgetsBindingObserver {
   Timer? _permissionTimer;
   bool _permissionRequestScheduled = false;
 
+  /// Task ids currently animating from full size to 0 (before repo update).
+  final Set<int> _collapsingTaskIds = {};
+
+  /// Task ids that have finished "animate in" (0 → full).
+  final Set<int> _visibleTaskIds = {};
+  static const _taskSizeDuration = Duration(milliseconds: 280);
+  static const _taskSizeCurve = Curves.easeInOutCubic;
+
+  /// Task id that can be undone (just completed). Null when no undo available.
+  int? _undoTaskId;
+  Timer? _undoHideTimer;
+  static const _undoVisibleDuration = Duration(seconds: 2);
+
   @override
   void initState() {
     super.initState();
@@ -185,6 +198,7 @@ class _ListsScreenState extends State<ListsScreen> with WidgetsBindingObserver {
   @override
   void dispose() {
     _permissionTimer?.cancel();
+    _undoHideTimer?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     _sub?.cancel();
     _taskSub?.cancel();
@@ -275,7 +289,14 @@ class _ListsScreenState extends State<ListsScreen> with WidgetsBindingObserver {
           ],
         ),
         drawer: _buildDrawer(context),
-        body: _buildTaskList(leftAction, rightAction),
+        body: Stack(
+          children: [
+            Positioned.fill(
+              child: SafeArea(child: _buildTaskList(leftAction, rightAction)),
+            ),
+            _buildUndoButton(),
+          ],
+        ),
         floatingActionButton: _buildFloatingActionButton(),
       ),
     );
@@ -412,11 +433,25 @@ class _ListsScreenState extends State<ListsScreen> with WidgetsBindingObserver {
         );
       }
       final isTrash = _selectedVirtualKey == _virtualTrash;
+      final taskIds = tasks.map((t) => t.id).toSet();
+      _visibleTaskIds.removeWhere((id) => !taskIds.contains(id));
+      _collapsingTaskIds.removeWhere((id) => !taskIds.contains(id));
+      final newIds = taskIds
+          .where((id) => !_visibleTaskIds.contains(id))
+          .toSet();
+      if (newIds.isNotEmpty) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) setState(() => _visibleTaskIds.addAll(newIds));
+        });
+      }
       return ListView.builder(
         padding: const EdgeInsets.symmetric(horizontal: 10),
         itemCount: tasks.length,
         itemBuilder: (context, index) {
           final task = tasks[index];
+          final isCollapsing = _collapsingTaskIds.contains(task.id);
+          final isVisible = _visibleTaskIds.contains(task.id);
+          final showContent = isVisible && !isCollapsing;
           final primary = Theme.of(context).colorScheme.primary;
           final subtitleChildren = <Widget>[
             if (task.notes != null && task.notes!.trim().isNotEmpty)
@@ -470,7 +505,9 @@ class _ListsScreenState extends State<ListsScreen> with WidgetsBindingObserver {
               onChanged: isTrash ? null : (_) => _toggleTask(task),
             ),
             title: Padding(
-              padding: EdgeInsets.only(bottom: subtitleChildren.isEmpty ? 0 : 5),
+              padding: EdgeInsets.only(
+                bottom: subtitleChildren.isEmpty ? 1 : 5,
+              ),
               child: Text(
                 task.title,
                 maxLines: 1,
@@ -494,41 +531,49 @@ class _ListsScreenState extends State<ListsScreen> with WidgetsBindingObserver {
                   ),
             onTap: () => _showEditTaskSheet(task),
           );
-          if (isTrash) return tile;
-          return Dismissible(
+          Widget content = isTrash
+              ? tile
+              : Dismissible(
+                  key: ValueKey(task.id),
+                  direction: DismissDirection.horizontal,
+                  confirmDismiss: (direction) async {
+                    final action = direction == DismissDirection.endToStart
+                        ? leftAction
+                        : rightAction;
+                    if (action == SwipeAction.edit) {
+                      _showEditTaskSheet(task);
+                      return false;
+                    }
+                    if (action == SwipeAction.trash) {
+                      RepositoryScope.of(
+                        context,
+                      ).notificationService.cancelReminder(task.id);
+                      _taskRepository.softDelete(task.id);
+                    } else {
+                      _taskRepository.completeTask(task.id);
+                    }
+                    return true;
+                  },
+                  background: _swipeBackground(
+                    context,
+                    rightAction,
+                    Alignment.centerLeft,
+                    EdgeInsets.only(left: 16),
+                  ),
+                  secondaryBackground: _swipeBackground(
+                    context,
+                    leftAction,
+                    Alignment.centerRight,
+                    EdgeInsets.only(right: 16),
+                  ),
+                  child: tile,
+                );
+          return AnimatedSize(
             key: ValueKey(task.id),
-            direction: DismissDirection.horizontal,
-            confirmDismiss: (direction) async {
-              final action = direction == DismissDirection.endToStart
-                  ? leftAction
-                  : rightAction;
-              if (action == SwipeAction.edit) {
-                _showEditTaskSheet(task);
-                return false;
-              }
-              if (action == SwipeAction.trash) {
-                RepositoryScope.of(
-                  context,
-                ).notificationService.cancelReminder(task.id);
-                _taskRepository.softDelete(task.id);
-              } else {
-                _taskRepository.completeTask(task.id);
-              }
-              return true;
-            },
-            background: _swipeBackground(
-              context,
-              rightAction,
-              Alignment.centerLeft,
-              EdgeInsets.only(left: 16),
-            ),
-            secondaryBackground: _swipeBackground(
-              context,
-              leftAction,
-              Alignment.centerRight,
-              EdgeInsets.only(right: 16),
-            ),
-            child: tile,
+            duration: _taskSizeDuration,
+            curve: _taskSizeCurve,
+            alignment: Alignment.topCenter,
+            child: showContent ? content : const SizedBox.shrink(),
           );
         },
       );
@@ -602,11 +647,74 @@ class _ListsScreenState extends State<ListsScreen> with WidgetsBindingObserver {
   }
 
   void _toggleTask(Task task) {
-    if (task.completedAt != null) {
-      _taskRepository.incompleteTask(task.id);
-    } else {
-      _taskRepository.completeTask(task.id);
+    final isTrash = _selectedVirtualKey == _virtualTrash;
+    if (isTrash) {
+      if (task.completedAt != null) {
+        _taskRepository.incompleteTask(task.id);
+      } else {
+        _taskRepository.completeTask(task.id);
+      }
+      return;
     }
+    setState(() => _collapsingTaskIds.add(task.id));
+    Future.delayed(_taskSizeDuration, () {
+      if (!mounted) return;
+      if (task.completedAt != null) {
+        _taskRepository.incompleteTask(task.id);
+      } else {
+        _taskRepository.completeTask(task.id);
+        _undoHideTimer?.cancel();
+        _undoHideTimer = Timer(_undoVisibleDuration, () {
+          if (mounted) setState(() => _undoTaskId = null);
+        });
+        setState(() => _undoTaskId = task.id);
+      }
+      // Do NOT remove from _collapsingTaskIds here: stream may not have
+      // emitted yet, so the task would briefly reappear. Clean in build instead.
+    });
+  }
+
+  void _onUndoComplete() {
+    if (_undoTaskId == null) return;
+    _undoHideTimer?.cancel();
+    _undoHideTimer = null;
+    _taskRepository.incompleteTask(_undoTaskId!);
+    setState(() => _undoTaskId = null);
+  }
+
+  Widget _buildUndoButton() {
+    final theme = Theme.of(context);
+    final show = _undoTaskId != null && _selectedVirtualKey != _virtualTrash;
+    return Positioned(
+      left: 16,
+      bottom: 16 + MediaQuery.of(context).padding.bottom,
+      child: AnimatedSlide(
+        duration: const Duration(milliseconds: 280),
+        curve: Curves.easeOutCubic,
+        offset: show ? Offset.zero : const Offset(0, 2),
+        child: IgnorePointer(
+          ignoring: !show,
+          child: Material(
+            elevation: 6,
+            shadowColor: theme.shadowColor,
+            borderRadius: BorderRadius.circular(28),
+            color: theme.colorScheme.secondaryContainer,
+            child: InkWell(
+              onTap: show ? _onUndoComplete : null,
+              borderRadius: BorderRadius.circular(28),
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Icon(
+                  Icons.undo_rounded,
+                  size: 24,
+                  color: theme.colorScheme.onSecondaryContainer,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   void _showAddTaskSheet() {
