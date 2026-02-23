@@ -110,8 +110,8 @@ class _ListsScreenState extends State<ListsScreen> with WidgetsBindingObserver {
     }
     if (_taskRepo != scope.taskRepository) {
       _taskRepo = scope.taskRepository;
+      _subscribeToTasks();
     }
-    _subscribeToTasks();
     if (!_permissionRequestScheduled) {
       _permissionRequestScheduled = true;
       _permissionTimer = Timer(const Duration(seconds: 5), () {
