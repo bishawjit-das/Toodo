@@ -17,7 +17,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
   late SwipeAction _rightSwipeAction;
   late Color _accentColor;
   bool _seeding = false;
-  static const _settingsTitleStyle = TextStyle(fontSize: 16);
+  static const _settingsTitleStyle = TextStyle(
+    fontSize: 18,
+    fontWeight: FontWeight.w600,
+  );
   static const _settingsSubtitleStyle = TextStyle(fontSize: 14);
 
   @override

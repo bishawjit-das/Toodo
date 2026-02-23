@@ -260,7 +260,7 @@ class _ListsScreenState extends State<ListsScreen> with WidgetsBindingObserver {
           title: Watch(
             (context) => Text(
               _titleFor(),
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+              style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
             ),
           ),
           actions: [
@@ -388,8 +388,27 @@ class _ListsScreenState extends State<ListsScreen> with WidgetsBindingObserver {
         );
       }
       if (tasks.isEmpty) {
-        return const Center(
-          child: Text('No tasks', style: TextStyle(fontSize: 16)),
+        return Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Icon(
+                Icons.checklist_rounded,
+                size: 48,
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+              SizedBox(height: 6),
+              Text(
+                'No tasks',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ],
+          ),
         );
       }
       final isTrash = _selectedVirtualKey == _virtualTrash;
@@ -658,7 +677,7 @@ class _ListsScreenState extends State<ListsScreen> with WidgetsBindingObserver {
   static const _drawerTileGap = 8.0;
   static const _drawerTileLead = 32.0;
   static const _drawerTitleStyle = TextStyle(
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: FontWeight.w600,
   );
 
@@ -694,12 +713,15 @@ class _ListsScreenState extends State<ListsScreen> with WidgetsBindingObserver {
           child: ListTileTheme(
             data: ListTileTheme.of(context).copyWith(
               contentPadding: const EdgeInsets.symmetric(
-                horizontal: 16,
+                horizontal: 10,
                 vertical: 2,
+              ),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
               ),
             ),
             child: ListView(
-              padding: EdgeInsets.zero,
+              padding: const EdgeInsets.symmetric(horizontal: 10),
               children: [
                 // Section 1: All, Inbox, Today, Tomorrow, Next 7 days
                 ListTile(
